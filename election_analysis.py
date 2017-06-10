@@ -72,18 +72,18 @@ def national_plot(fips_indices, data, column):
     return 0
 
 def state_plot(fips_indices, data, column, name, min_val, max_val):
-    fig = plt.figure(figsize=(7.0, 7.0))
     print name
-    print fips_indices
+    fig = plt.figure(figsize=(7.0, 7.0))
     ax = plt.axes(projection=ccrs.Miller(), aspect=1.3)
     #Change to be around state of interest
     if name=='PA':
         ax.set_extent([-81.0, -74., 37., 40.])
-    if name == 'FL':
+    elif name == 'FL':
         ax.set_extent([-88.0,-79., 23.,30.])
-    if name == 'NC':
+    elif name == 'NC':
         ax.set_extent([-85.0,-74., 32.,36.])
-        
+    else:
+        ax.set_extent([-150, -70, 20, 45])
     filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
     for state, record in zip(shpreader.Reader(filename).geometries(), shpreader.Reader(filename).records()):
         id = str(int(record.__dict__['attributes']['GEOID']))
@@ -252,104 +252,77 @@ else:
 #Train the neural net on all other states
 
 
-#Inputs: the data matrix for the counties of interest
-#Outputs: the actual fraction GOP/(GOP+DEM)
-#FIPS: The county codes corresponding to each row in Inputs/Outputs/Pop
-#Pop: number of votes cast DEM+GOP in each county
-rows = X.shape[0]
-cols = X.shape[1]
-training_inputs = np.zeros((rows,cols))
-training_outputs = np.zeros((rows))
-training_fips = np.zeros((rows))
-training_pop = np.zeros((rows))
 
-control_inputs = np.zeros((rows, cols))
-control_outputs = np.zeros((rows))
-control_fips = np.zeros((rows))
-control_pop = np.zeros((rows))
 
-test_inputs = np.zeros((rows, cols))
-test_outputs = np.zeros((rows))
-test_fips = np.zeros((rows))
-test_pop = np.zeros((rows))
-
-states = ['AL', 'AK', 'AZ', 'AR', 'CA','CO']
-control_state = 'PA'
-test_state = 'FL'
-#Segment the data into one of the three categories (training, control, test)
-for i in range(len(fips_indices)):
-    if int(fips_indices[i])>42000 and int(fips_indices[i])<43000:
-        control_inputs[i,:] = X[i,:]
-        control_outputs[i] = Y[i,0]
-        control_fips[i] = int(fips_indices[i])
-        control_pop[i] = Y[i,1]
-        
-    elif int(fips_indices[i])>37000 and int(fips_indices[i])<38000:
-        test_inputs[i,:] = X[i,:]
-        test_outputs[i] = Y[i,0]
-        test_fips[i] = int(fips_indices[i])
-        test_pop[i] = Y[i,1]
-        
+states={'AL':'01','AK':'02','AZ':'04','AR':'05','CA':'06','CO':'08','CT':'09','DE':'10','DC':'11','FL':'12','GA':'13','HI':'15','ID':'16','IL':'17','IN':'18','IA':'19','KS':'20','KY':'21','LA':'22','ME':'23','MD':'24','MA':'25','MI':'26','MN':'27','MS':'28','MO':'29','MT':'30','NE':'31','NV':'32','NH':'33','NJ':'34','NM':'35','NY':'36','NC':'37','ND':'38','OH':'39','OK':'40','OR':'41','PA':'42','RI':'44','SC':'45','SD':'46','TN':'47','TX':'48','UT':'49','VT':'50','VA':'51','WA':'53','WV':'54','WI':'55','WY':'56'}
+test_state = 'NC'
+def run_neural_net(test_state, states=states):
+    if test_state not in states:
+        print "State not available!"
+        return 0
     else:
-        training_inputs[i,:] = X[i,:]
-        training_outputs[i] = Y[i,0]
-        training_fips[i] = int(fips_indices[i])
-        training_pop[i] = Y[i,1]
+        fips_min = int(states[test_state]+'000')
+        fips_max = int(str(int(states[test_state])+1)+'000')
+        print fips_min
+        print fips_max
+        #Inputs: the data matrix for the counties of interest
+        #Outputs: the actual fraction GOP/(GOP+DEM)
+        #FIPS: The county codes corresponding to each row in Inputs/Outputs/Pop
+        #Pop: number of votes cast DEM+GOP in each county
+        rows = X.shape[0]
+        cols = X.shape[1]
+        training_inputs = np.zeros((rows,cols))
+        training_outputs = np.zeros((rows))
+        training_fips = np.zeros((rows))
+        training_pop = np.zeros((rows))
+
+        test_inputs = np.zeros((rows, cols))
+        test_outputs = np.zeros((rows))
+        test_fips = np.zeros((rows))
+        test_pop = np.zeros((rows))
+
+        #Segment the data into one of the two categories (training or test)
+        for i in range(len(fips_indices)):
+            if int(fips_indices[i])>fips_min and int(fips_indices[i])<fips_max:
+                test_inputs[i,:] = X[i,:]
+                test_outputs[i] = Y[i,0]
+                test_fips[i] = int(fips_indices[i])
+                test_pop[i] = Y[i,1]
         
-#Remove the rows corresponding to counties that aren't classified in that category
-control_inputs = control_inputs[np.nonzero(control_fips)]
-control_outputs = control_outputs[np.nonzero(control_fips)]
-control_fips = control_fips[np.nonzero(control_fips)]
-control_pop = control_pop[np.nonzero(control_pop)]
+            else:
+                training_inputs[i,:] = X[i,:]
+                training_outputs[i] = Y[i,0]
+                training_fips[i] = int(fips_indices[i])
+                training_pop[i] = Y[i,1]
+        
+        #Remove the rows corresponding to counties that aren't classified in that category
+        test_inputs = test_inputs[np.nonzero(test_fips)]
+        test_outputs = test_outputs[np.nonzero(test_fips)]
+        test_fips = test_fips[np.nonzero(test_fips)]
+        test_pop = test_pop[np.nonzero(test_pop)]
 
-test_inputs = test_inputs[np.nonzero(test_fips)]
-test_outputs = test_outputs[np.nonzero(test_fips)]
-test_fips = test_fips[np.nonzero(test_fips)]
-test_pop = test_pop[np.nonzero(test_pop)]
+        training_inputs = training_inputs[np.nonzero(training_fips)]
+        training_outputs = training_outputs[np.nonzero(training_fips)]
+        training_fips = training_fips[np.nonzero(training_fips)]
+        training_pop = training_pop[np.nonzero(training_pop)]
 
-training_inputs = training_inputs[np.nonzero(training_fips)]
-training_outputs = training_outputs[np.nonzero(training_fips)]
-training_fips = training_fips[np.nonzero(training_fips)]
-training_pop = training_pop[np.nonzero(training_pop)]
-
-
-
-print "Initiating neural network..."
-nn = mlp(verbose=True)
-"Training neural network..."
-nn.fit(training_inputs, training_outputs)
-print "Done!"
-control_results = nn.predict(control_inputs)
-min_val = -0.25#np.min(control_outputs-control_results)#*control_pop)
-max_val = 0.25#np.max(control_outputs-control_results)#*control_pop)
-#print len(control_outputs)
-print control_outputs
-print control_results
-print "Average deviation of " + str(np.mean(np.abs(control_results-control_outputs))*100.0)+"% +/-" + str(np.std(np.abs(control_outputs-control_results))*100)+"%"
-bias = np.mean(control_results-control_outputs)*100.0
-if bias>0.0:
-    print "Average bias of " + str(np.abs(bias)) + "% in favor of Hillary"
-if bias<0.0:
-    print "Average bias of " + str(np.abs(bias)) + "% in favor of Trump"
-
-#Data-model
-state_plot(control_fips, control_outputs-control_results, 0, 'PA', min_val, max_val)
-
-
-
-test_results = nn.predict(test_inputs)
-print test_outputs
-print test_results
-print (test_outputs-test_results)*100.0
-bias = np.mean(test_results-test_outputs)*100.0
-print "Average deviation of " + str(np.mean(np.abs(test_results-test_outputs))*100.0)+"% +/-" + str(np.std(np.abs(test_outputs-test_results))*100)+"%"
-
-if bias>0.0:
-    print "Average bias of " + str(np.abs(bias)) + "% in favor of Hillary"
-if bias<0.0:
-    print "Average bias of " + str(np.abs(bias)) + "% in favor of Trump"
-
-state_plot(test_fips, (test_outputs-test_results), 0, 'NC', min_val, max_val)
-
-
+        #Run the neural net
+        print "Initiating neural network..."
+        nn = mlp(verbose=True)
+        "Training neural network..."
+        nn.fit(training_inputs, training_outputs)
+        print "Done!"
+        
+        test_results = nn.predict(test_inputs)
+        bias = np.mean(test_results-test_outputs)*100.0
+        
+        print "Average deviation of " + str(np.mean(np.abs(test_results-test_outputs))*100.0)+"% +/-" + str(np.std(np.abs(test_outputs-test_results))*100)+"%"
+        if bias>0.0:
+            print "Average bias of " + str(np.abs(bias)) + "% in favor of Hillary"
+        if bias<0.0:
+            print "Average bias of " + str(np.abs(bias)) + "% in favor of Trump"
+        min_val = -0.15
+        max_val = 0.15
+        state_plot(test_fips, (test_outputs-test_results), 0, test_state, min_val, max_val)
+        return 0
 
