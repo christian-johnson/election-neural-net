@@ -11,15 +11,17 @@ Hopefully law enforcement and intelligence agencies will perform a thorough inve
 I wondered whether it is possible to detect voting interference without having direct access to the voting machines themselves. To find out, we need to start by putting ourselves in the mindset of Vladimir Putin, and assume that he has the capability and determination to pull this off.
 ## So you want to hack an election
 For obvious reasons, you wouldn't want to get caught changing vote tallies. That means Putin can't use any of his usual shenanigans, like bussing people around to multiple voting sites. This effort has got to be more subtle- and that means tampering with electronic voting machines. 
-You also would want to concentrate your efforts on only a handful of swing states- it doesn't make much sense to try to swing California for Trump, for example. Your risk of getting caught also increases as you expand the number of targets. So if I were Putin, I would focus on states like Florida, North Carolina, Ohio, and Pennsylvania, which were the biggest swing states this election. (In hindsight, we know that Michigan and Wisconsin also had razor-thin margins and ultimately voted in favor of Trump, but in the weeks leading up to the election those states were widely considered safe ground for the Democrats.)
+You also would want to concentrate your efforts on only a handful of swing states- it doesn't make much sense to try to swing California for Trump, for example. Moreover, your risk of getting caught by an astute observer increases as you expand the number of targets. If I were Putin, I would focus on states like Florida, North Carolina, Ohio, and Pennsylvania, which were the biggest swing states this election. (In hindsight, we know that Michigan and Wisconsin also had razor-thin margins and ultimately voted in favor of Trump, but in the weeks leading up to the election those states were widely considered safe ground for the Democrats.)
 
-Within each state, the same principle of limiting your targets still applies- only this time the only thing that matters is the popular vote within the state. Therefore it makes sense to target the big population centers within each swing state (a few tens of thousands of votes changed one way or another will go unnoticed in Charlotte, for example, but would be highly conspicuous in a small county).
+Within each state, the same principle of maintaining a limited number of targets still applies- only this time the only thing that matters is the popular vote within the state. 
+Therefore it makes sense to target only the big population centers within each swing state. 
+A few tens of thousands of votes changed one way or another will go unnoticed in Charlotte, for example, but would be highly conspicuous in a small county. 
+And a few tens of thousands of votes could be all you need to swing a state one way or another.
 
-Ok, so we can make an educated guess that the places most likely to be a target for vote tampering are counties that contain large-ish cities, in swing states. The big question still remains- how would we know if the votes counts in those counties are valid or not? What we need is an accurate, county-by-county prediction of the Trump vote fraction, which we can then compare to the actual votes. To do this, we'll turn to machine learning.
+Ok, so we can make an educated guess that the places most likely to be a target for vote tampering are counties that contain large-ish cities, in swing states. The big question still remains- how would we know if the votes counts in those counties are valid or not? What we would need is an accurate, county-by-county prediction of how that county is likely to vote, which we can then compare to the actual voting returns. To do this, we'll turn to machine learning.
 
 ## Crunching numbers with neural nets
-
-
+There's been a lot of buzz about the possibilities of what so-called "deep learning" can do in fields like image classification and voice recognition. For this analysis, however, we don't need anything particularly fancy- a good old-fashioned neural net will do just fine. For the inputs we can provide it with readily-available demographic information, things like median income, population density, and ethnicity breakdown.
 
 {% highlight python %}
 from sklearn.neural_network import MLPRegressor as mlp
