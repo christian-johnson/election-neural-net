@@ -12,6 +12,11 @@ import cartopy.io.shapereader as shpreader
 
 import load_data as ld
 
+from matplotlib import rcParams
+from matplotlib.pyplot import rc
+rcParams['text.usetex'] = True
+rc('text.latex', preamble=r'\usepackage{amsmath}')
+
 
 def state_extent(name):
     """
@@ -91,28 +96,26 @@ def state_extent(name):
     else:
         return [-150, -70, 20, 45]
     
-def state_plot_data_model(fips_indices, test_outputs, test_results, name):
-    print name
-    fig = plt.figure(figsize=(12.0, 5.0))
+def state_plot_data_model(fips_indices, test_results, test_outputs, name):
+    fig = plt.figure(figsize=(14.0, 7.0))
     ax1 = plt.axes([0.0, 0.0, 0.45, 1.0],projection=ccrs.Miller(), aspect=1.3)
     ax2 = plt.axes([0.45, 0.0, 0.45, 1.0],projection=ccrs.Miller(), aspect=1.3)
     ax1.set_extent(state_extent(name))
     ax2.set_extent(state_extent(name))
 
-    data = test_results
     filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
     for state, record in zip(shpreader.Reader(filename).geometries(), shpreader.Reader(filename).records()):
         id = str(int(record.__dict__['attributes']['GEOID']))
-        if id in dict(zip(map(str, map(int, fips_indices)),data)):
+        if id in map(str, map(int, fips_indices)):
             min_val = -0.45
             max_val = 0.45
-            data = test_outputs-0.5
+            data = test_results-0.5
             value = (dict(zip(map(str, map(int,fips_indices)),data))[id]-min_val)/(max_val-min_val)
             ax1.add_geometries(state, crs=ccrs.Miller(), facecolor=cm.bwr(value), edgecolor='black', linewidth=0.2)
             
             min_val = -0.45
             max_val = 0.45
-            data = test_results-0.5
+            data = test_outputs-0.5
             value = (dict(zip(map(str, map(int,fips_indices)),data))[id]-min_val)/(max_val-min_val)
             ax2.add_geometries(state, crs=ccrs.Miller(), facecolor=cm.bwr(value), edgecolor='black', linewidth=0.2)
 
@@ -128,37 +131,35 @@ def state_plot_data_model(fips_indices, test_outputs, test_results, name):
     cmap = cm.seismic
     norm = mpl.colors.Normalize(vmin=-45.0, vmax=+45.0)
     cb = mpl.colorbar.ColorbarBase(axc, cmap=cmap,norm=norm,orientation='vertical')
-    cb.set_label('Vote Margin [%]')
+    cb.set_label('Vote Margin [\%]')
     
     #fig.suptitle('2016 US Presidential Election Results Residual: '+name)
     plt.savefig('plots/election_data_model_'+name+'.pdf',bbox_inches='tight')
-    plt.show()
+    #plt.show()
 
 
-def state_plot_residual(fips_indices, test_outputs, test_results, name, X, Y, training_results, all_fips_indices):
-    print name
-    fig = plt.figure(figsize=(12.0, 7.0))
-    ax1 = plt.axes([0.0, 0.0, 0.45, 1.0],projection=ccrs.Miller(), aspect=1.3)
-    ax2 = plt.axes([0.45, 0.0, 0.45, 1.0],projection=ccrs.Miller(), aspect=1.3)
+def state_plot_residual(training_inputs, training_outputs, training_results, training_fips, test_inputs, test_outputs, test_results, test_fips,name):
+    fig = plt.figure(figsize=(14.0, 7.0))
+    ax1 = plt.axes([0.0, 0.0, 0.42, 1.0],projection=ccrs.Miller(), aspect=1.3)
+    ax2 = plt.axes([0.44, 0.0, 0.42, 1.0],projection=ccrs.Miller(), aspect=1.3)
     ax1.set_extent(state_extent(name))
     ax2.set_extent(state_extent(name))
     
-    data = test_results
     filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
     for state, record in zip(shpreader.Reader(filename).geometries(), shpreader.Reader(filename).records()):
         id = str(int(record.__dict__['attributes']['GEOID']))
-        if id in dict(zip(map(str, map(int, fips_indices)),data)):
+        if id in map(str,map(int, test_fips)):
 
             min_val = -0.2
             max_val = 0.2
             data = test_outputs-test_results
-            value = (dict(zip(map(str, map(int,fips_indices)),data))[id]-min_val)/(max_val-min_val)
+            value = (dict(zip(map(str, map(int,test_fips)),data))[id]-min_val)/(max_val-min_val)
             ax1.add_geometries(state, crs=ccrs.Miller(), facecolor=cm.bwr(value), edgecolor='black', linewidth=0.2)
             
             min_val = -5.0
             max_val = 5.0
-            data = sigma(test_outputs-test_results, fips_indices, X, Y, training_results, all_fips_indices)
-            value = (dict(zip(map(str, map(int,fips_indices)),data))[id]-min_val)/(max_val-min_val)
+            data = sigma(id, test_outputs-test_results, test_inputs, test_fips, training_results, training_outputs, training_inputs, training_fips)
+            value = (data-min_val)/(max_val-min_val)
             ax2.add_geometries(state, crs=ccrs.Miller(), facecolor=cm.bwr(value), edgecolor='black', linewidth=0.2)
             
     print "Plotting..."
@@ -167,34 +168,49 @@ def state_plot_residual(fips_indices, test_outputs, test_results, name, X, Y, tr
     ax2.background_patch.set_visible(False)
     ax2.outline_patch.set_visible(False)
     
+    ax1.set_title('Simple Residuals')
+    ax2.set_title('Significance')
+    
+    min_val = -20.0
+    max_val = 20.0
     #Add colorbar
-    axc = plt.axes([0.85, 0.25, 0.02, 0.5], frameon=False)
+    axc = plt.axes([0.40, 0.25, 0.02, 0.5], frameon=False)
     cmap = cm.seismic
     norm = mpl.colors.Normalize(vmin=min_val, vmax=max_val)
     cb = mpl.colorbar.ColorbarBase(axc, cmap=cmap,norm=norm,orientation='vertical')
-    cb.set_label('GOP Vote Fraction [%]')
+    cb.set_label('Residual [\%]')
+    
+    min_val = -5.0
+    max_val = 5.0
+    axc2 = plt.axes([0.84, 0.25, 0.02, 0.5], frameon=False)
+    norm2 = mpl.colors.Normalize(vmin=min_val, vmax=max_val)
+    cb2 = mpl.colorbar.ColorbarBase(axc2, cmap=cmap,norm=norm2,orientation='vertical')
+    cb2.set_label('Significance [$\sigma$]')
     
     #fig.suptitle('2016 US Presidential Election Results Residual: '+name)
     plt.savefig('plots/election_residuals_'+name+'.pdf',bbox_inches='tight')
-    plt.show()
+    #plt.show()
 
 #For sklearn, we need the training data organized as a numpy array, with rows = counties and columns = data points
 #Ideally we will normalize everything to be within [-1, +1], and set missing values to be 0
 #Strategy: loop through each data file (i.e. loop through columns)
 
+
+#Outputs = output of the neural net
+#Results = actual results
+
 #Return array of significances for each county, given the spread of uncertainty in similar counties
-def sigma(resid, test_fips, X, Y, training_results, fips_indices):
+def sigma(id, resid, test_inputs, test_fips, training_results, training_outputs, training_inputs, training_fips):
     sigmas = np.zeros((len(resid)))
     j = 0
     for county_fips in test_fips:
         chi2_vals = np.zeros((3140))
         #Calculate chi2 between county inputs and the rest of the country
-        county_row = np.argmin(np.abs(fips_indices-county_fips))
-        chi2_vals = np.sum((X-X[county_row,:])**2, axis=1)
-        training_indices = np.argsort(chi2_vals[np.nonzero(chi2_vals)])[:15]
-        sigmas[j] = resid[j]/np.std(Y[training_indices]-training_results[training_indices])
+        chi2_vals = np.sum((training_inputs-test_inputs[j])**2, axis=1)
+        training_indices = np.argsort(chi2_vals[np.nonzero(chi2_vals)])[:10]
+        sigmas[j] = resid[j]/np.std(training_outputs[training_indices]-training_results[training_indices])
         j += 1
-    return sigmas
+    return sigmas[np.argmin(np.abs(test_fips-float(id)))]
 
 
 #Define plotting function, so we can see the results in a nice way
@@ -257,44 +273,6 @@ def national_plot(fips_indices, data):
     #plt.show()
     return 0
 
-def state_plot(fips_indices, data, column, name, min_val, max_val):
-    print name
-    fig = plt.figure(figsize=(7.0, 7.0))
-    ax = plt.axes(projection=ccrs.Miller(), aspect=1.3)
-    #Change to be around state of interest
-    if name=='PA':
-        ax.set_extent([-81.0, -74., 37., 40.])
-    elif name == 'FL':
-        ax.set_extent([-88.0,-79., 23.,30.])
-    elif name == 'NC':
-        ax.set_extent([-85.0,-74., 32.,36.])
-    else:
-        ax.set_extent([-150, -70, 20, 45])
-    filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
-    for state, record in zip(shpreader.Reader(filename).geometries(), shpreader.Reader(filename).records()):
-        id = str(int(record.__dict__['attributes']['GEOID']))
-        if id in dict(zip(map(str, map(int, fips_indices)),data)):
-            value = (dict(zip(map(str, map(int,fips_indices)),data))[id]-min_val)/(max_val-min_val)
-            facecolor = cm.seismic(value)
-            edgecolor = 'black'
-            ax.add_geometries(state, crs=ccrs.Miller(), facecolor=facecolor, edgecolor=edgecolor, linewidth=0.2)
-                             
-    print "Plotting..."
-    ax.background_patch.set_visible(False)
-    ax.outline_patch.set_visible(False)
-
-    #Add colorbar
-    axc = plt.axes([0.85, 0.25, 0.02, 0.5], frameon=False)
-    cmap = cm.seismic
-    norm = mpl.colors.Normalize(vmin=min_val, vmax=max_val)
-    cb = mpl.colorbar.ColorbarBase(axc, cmap=cmap,norm=norm,orientation='vertical')
-    cb.set_label('Vote Residual [%]')
-    
-    fig.suptitle('2016 US Presidential Election Results Residual: '+name)
-    plt.savefig('plots/election_residual_'+name+'.pdf',bbox_inches='tight')
-    plt.show()
-    return 0
-
 #For sklearn, we need the training data organized as a numpy array, with rows = counties and columns = data points
 #Ideally we will normalize everything to be within [-1, +1], and set missing values to be 0
 #Strategy: loop through each data file (i.e. loop through columns)
@@ -331,7 +309,7 @@ datafiles = [
 #Election results come from https://github.com/tonmcg/County_Level_Election_Results_12-16
 #Caveat: for some reason Alaska doesn't report county-by-county data
 #We'll have to make a few assumptions on how the counties of Alaska voted
-reload_data = True
+reload_data = False
 if reload_data:
     #Column 0 of Y contains the GOP vote fraction, i.e. GOP/(GOP+DEM)
     #Column 1 of Y contains the total GOP+DEM # of votes
@@ -458,12 +436,12 @@ def run_neural_net(test_state, plot_state=False, states=states_codes):
         rows = X.shape[0]
         cols = X.shape[1]
         training_inputs = np.zeros((rows,cols))
-        training_outputs = np.zeros((rows))
+        training_results = np.zeros((rows))
         training_fips = np.zeros((rows))
         training_pop = np.zeros((rows))
 
         test_inputs = np.zeros((rows, cols))
-        test_outputs = np.zeros((rows))
+        test_results = np.zeros((rows))
         test_fips = np.zeros((rows))
         test_pop = np.zeros((rows))
 
@@ -471,42 +449,41 @@ def run_neural_net(test_state, plot_state=False, states=states_codes):
         for i in range(len(fips_indices)):
             if int(fips_indices[i])>fips_min and int(fips_indices[i])<fips_max:
                 test_inputs[i,:] = X[i,:]
-                test_outputs[i] = Y[i,0]
+                test_results[i] = Y[i,0]
                 test_fips[i] = int(fips_indices[i])
                 test_pop[i] = Y[i,1]
         
             else:
                 training_inputs[i,:] = X[i,:]
-                training_outputs[i] = Y[i,0]
+                training_results[i] = Y[i,0]
                 training_fips[i] = int(fips_indices[i])
                 training_pop[i] = Y[i,1]
         
+        trials = 10
         #Remove the rows corresponding to counties that aren't classified in that category
         test_inputs = test_inputs[np.nonzero(test_fips)]
-        test_outputs = test_outputs[np.nonzero(test_fips)]
+        test_results = test_results[np.nonzero(test_fips)]
         test_fips = test_fips[np.nonzero(test_fips)]
         test_pop = test_pop[np.nonzero(test_pop)]
+        test_outputs = np.zeros((len(test_fips), trials))
 
         training_inputs = training_inputs[np.nonzero(training_fips)]
-        training_outputs = training_outputs[np.nonzero(training_fips)]
+        training_results = training_results[np.nonzero(training_fips)]
         training_fips = training_fips[np.nonzero(training_fips)]
         training_pop = training_pop[np.nonzero(training_pop)]
-        test_results = np.zeros((len(test_fips), 10))
-        training_results = np.zeros((len(training_fips),10))
-        
+        training_outputs = np.zeros((len(training_fips),trials))
         #Run the neural net
         print "Initiating neural network..."
-        trials = 10
         for i in range(trials):
             nn = mlp(verbose=True)
             "Training neural network..."
-            nn.fit(training_inputs, training_outputs)
+            nn.fit(training_inputs, training_results)
             print "Done!"
         
             tmp_results = nn.predict(test_inputs)
-            test_results[:,i] = tmp_results
+            test_outputs[:,i] = tmp_results
             
-            training_results[:,i] = nn.predict(training_inputs)   
+            training_outputs[:,i] = nn.predict(training_inputs)   
             """
             #Interpret results     
             bias = np.mean(test_results-test_outputs)*100.0
@@ -517,9 +494,12 @@ def run_neural_net(test_state, plot_state=False, states=states_codes):
                 print "Average bias of " + str(np.abs(bias)) + "% in favor of Trump"
             """
                 
-        test_results = np.sum(test_results, axis=1)/float(trials)
-        training_results = np.sum(training_results, axis=1)/float(trials)
+        test_outputs = np.sum(test_outputs,axis=1)/float(trials)
+        training_outputs = np.sum(training_outputs, axis=1)/float(trials)
+        
         if plot_state:
-            #state_plot_data_model(test_fips, test_outputs, test_results, test_state)
-            state_plot_residual(test_fips, test_outputs, test_results, test_state, X, Y, training_results, fips_indices)
+            state_plot_data_model(test_fips, test_results, test_outputs, test_state)
+            state_plot_residual(training_inputs, training_outputs, training_results, training_fips, test_inputs, test_outputs, test_results, test_fips, test_state)
         return (test_outputs-test_results)*100.0, test_fips
+        
+run_neural_net('FL', plot_state=True, states=states_codes)
