@@ -14,7 +14,7 @@ import load_data as ld
 
 
 #Define plotting function, so we can see the results in a nice way
-def national_plot(fips_indices, data, column):
+def national_plot(fips_indices, data):
     power = 0
     #data_dict = dict(zip(map(str,map(int,data[:,0])),map(float,data[:,45])))
     fig = plt.figure(figsize=(14.0,6.3))
@@ -28,8 +28,11 @@ def national_plot(fips_indices, data, column):
     ax3 = plt.axes([0.1, 0.05,0.2,0.3],projection=ccrs.Miller(), aspect=1.3, frameon=False)
     ax3.set_extent([-162.0,-152., 18.,23.])
     filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
+    
     for state, record in zip(shpreader.Reader(filename).geometries(), shpreader.Reader(filename).records()):
         id = str(int(record.__dict__['attributes']['GEOID']))
+        if id == '46102':
+            id = '46113'
         if id in dict(zip(map(str, map(int, fips_indices)),data)):
             value = dict(zip(map(str, map(int,fips_indices)),data))[id]
             facecolor = cm.seismic(value)
@@ -46,7 +49,7 @@ def national_plot(fips_indices, data, column):
             edgecolor = 'black'
             #Is the county in Hawaii, Alaska, or the mainland?
             if int(record.__dict__['attributes']['GEOID'])<2991 and int(record.__dict__['attributes']['GEOID'])>2013: 
-                ax2.add_geometries(state, crs=ccrs.Miller(), facecolor=facecolor, edgecolor=edgecolor, linewidth=0.2)
+                ax2.add_geometries(state, crs=ccrs.Miller(), facecolor=cm.seismic(0.5288700180057424), edgecolor=edgecolor, linewidth=0.2)
             elif int(record.__dict__['attributes']['GEOID'])<15010 and int(record.__dict__['attributes']['GEOID'])>15000: 
                 ax3.add_geometries(state, crs=ccrs.Miller(), facecolor=facecolor, edgecolor=edgecolor, linewidth=0.2)
             else:
@@ -66,9 +69,8 @@ def national_plot(fips_indices, data, column):
     cb = mpl.colorbar.ColorbarBase(axc, cmap=cmap,norm=norm,orientation='vertical')
     cb.set_label('Vote Margin [%]')
     
-    fig.suptitle('2016 US Presidential Election Results')
     plt.savefig('plots/election_results.pdf',bbox_inches='tight')
-    plt.show()
+    #plt.show()
     return 0
 
 def state_plot(fips_indices, data, column, name, min_val, max_val):
@@ -140,15 +142,16 @@ datafiles = [
 'income_inequality_2010_2015.xls',
 'rent_burdened_2010_2015.xls']
 
-
+    
 
 #Election results come from https://github.com/tonmcg/County_Level_Election_Results_12-16
 #Caveat: for some reason Alaska doesn't report county-by-county data
 #We'll have to make a few assumptions on how the counties of Alaska voted
-reload_data = False
+reload_data = True
 if reload_data:
     #Column 0 of Y contains the GOP vote fraction, i.e. GOP/(GOP+DEM)
     #Column 1 of Y contains the total GOP+DEM # of votes
+    #From these numbers, you should be able to calculate the number of DEM votes or GOP votes
     Y = np.zeros((3140,2))
     g = xlrd.open_workbook('US_County_Level_Presidential_Results_08-16.xls')
     h = g.sheet_by_index(0)
@@ -156,7 +159,6 @@ if reload_data:
     fips_indices = np.zeros((len(h.col_values(start_rowx=30, colx=1))))
     Y = np.zeros((len(h.col_values(start_rowx=31, colx=1)),2))
     X = np.zeros((len(h.col_values(start_rowx=31, colx=1)),24))
-
     i = 0
     for fips_id in map(int,h.col_values(start_rowx=31, colx=1)):
         fips_indices[i] = fips_id
@@ -164,7 +166,8 @@ if reload_data:
         Y[i,1] = h.col_values(start_rowx=31, colx=4)[i]
         X[i,1] = h.col_values(start_rowx=31, colx=18)[i]
         i += 1
-    
+    #To make a nice plot national plot of the actual election results
+    #national_plot(fips_indices, Y[:,0])
     
     #Population-based statistics first
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'population_1970_2016.xls', 2015)
@@ -201,7 +204,6 @@ if reload_data:
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'indian_population_2009_2015.xls', 2009)      
     X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', 2009, pop = X[:,0]) 
     data_col += 1
-    
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'hispanic_population_2009_2015.xls', 2015)      
     X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', 2015, pop = X[:,0]) 
     data_col += 1
@@ -232,7 +234,6 @@ if reload_data:
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'homeownership_rate_2009_2015.xls', 2015, 'percent')
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'income_inequality_2010_2015.xls', 2015, 'percent')
     
-    
     file = open('data.pk1', 'wb')
     pickle.dump([X,Y,fips_indices],file)
     file.close()
@@ -244,7 +245,6 @@ else:
     file.close()     
     print "Done!"
 
-#national_plot(fips_indices, Y, 0)
 
 #Initial Analysis: use PA as our control state (no electronic voting). PA FIPS codes begin with 42
 #Use Florida as the test state (maybe hacked). FL FIPS codes begin with 12

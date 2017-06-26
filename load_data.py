@@ -109,10 +109,8 @@ def normalize_data(X, Y, fips_indices, data_col, norm_scheme, date, pop = np.zer
             shp_fips = int(record.__dict__['attributes']['GEOID'])
             if shp_fips in fips_indices:
                 shp_area = record.__dict__['attributes']['ALAND']
-                print shp_area
                 the_index = int(np.argmin(np.abs(fips_indices-shp_fips)))
                 X[the_index,data_col] *= np.sqrt(1000.0/shp_area)
-                print X[the_index,data_col]
                 good_indices.append(the_index)
         Y = Y[good_indices,:]
         fips_indices = fips_indices[good_indices]
