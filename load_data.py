@@ -82,7 +82,7 @@ def add_data_column(X, Y, fips_indices, filename, date, norm_scheme = 'none'):
         
 #Here we normalize everything to [0, 1.0], and remove rows that are incomplete.
 #There should be enough complete rows to get the neural net to be trained well
-def normalize_data(X, Y, fips_indices, data_col, norm_scheme, date, pop = np.zeros((1000))):
+def normalize_data(X, Y, fips_indices, data_col, norm_scheme, pop = np.zeros((1000))):
     #Commute times are listed in minutes- report as fraction of an hour
     if norm_scheme =='fraction_of_hour':
         X[:,data_col] *= 1.0/60.0
@@ -95,6 +95,9 @@ def normalize_data(X, Y, fips_indices, data_col, norm_scheme, date, pop = np.zer
     if norm_scheme == 'population1000':
         X[:,data_col] *= 0.001/pop
         
+    if norm_scheme == 'Y_population1000':
+        Y[:,data_col] *= 0.001/pop
+
     if norm_scheme == 'none':
         X[:,data_col] *= 1.0
         
@@ -121,6 +124,5 @@ def normalize_data(X, Y, fips_indices, data_col, norm_scheme, date, pop = np.zer
     X = X[np.nonzero(X[:,data_col])[0],:]
         
     return X, Y, fips_indices
-    
     
     
