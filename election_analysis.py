@@ -1,3 +1,4 @@
+print "Loading required packages..."
 from sklearn.neural_network import MLPRegressor as mlp
 import numpy as np
 import xlrd
@@ -14,14 +15,16 @@ import load_data as ld
 
 from matplotlib import rcParams
 from matplotlib.pyplot import rc
+print "Successfully loaded packages!"
+
+#Set matplotlib parameters to be able to use Greek letters in plots
 rcParams['text.usetex'] = True
 rc('text.latex', preamble=r'\usepackage{amsmath}')
 
 
 def state_extent(name):
     #For plotting a single state at a time... I haven't gone through every state yet
-
-    #Change to be around state of interest
+    #Returns latitude, longitude to be around state of interest
     if name =='AL':
         return [-89.0, -84.5, 30.0, 35.4]
     elif name == 'AZ':
@@ -274,47 +277,12 @@ def national_plot(fips_indices, data, data_min, data_max, vmin, vmax, plt_title,
     #plt.show()
     return 0
 
-#For sklearn, we need the training data organized as a numpy array, with rows = counties and columns = data points
-#Ideally we will normalize everything to be within [-1, +1], and set missing values to be 0
-#Strategy: loop through each data file (i.e. loop through columns)
-
-#The data files from St. Louis Federal Reserve
-datafiles = [
-'commuting_time_2009_2015.xls',
-'indian_population_2009_2015.xls',
-'single_parent_2009_2015.xls',
-'asian_population_2009_2015.xls',
-'crime_rate_2005_2015.xls',
-'median_age_2009_2015.xls',
-'subprime_percent_1999_2016.xls',
-'associates_degree_2009_2015.xls',
-'disconnected_youth_2009_2015.xls',
-'median_income_1989_2014.xls',
-'unemployment_rate_1970_2017.xls',
-'bachelors_2010_2012.xls',
-'food_stamps_1989_2013.xls',
-'net_migration_2009_2013.xls',
-'white_population_2009_2015.xls',
-'black_population_2009_2015.xls',
-'hispanic_population_2009_2015.xls',
-'population_1970_2016.xls',
-'building_permits_1990_2015.xls',
-'homeownership_rate_2009_2015.xls',
-'poverty_rate_1989_2014.xls',
-'business_establishments_1990_2016.xls',
-'income_inequality_2010_2015.xls',
-'rent_burdened_2010_2015.xls']
-
-    
 
 #Election results come from https://github.com/tonmcg/County_Level_Election_Results_12-16
 #Caveat: for some reason Alaska doesn't report county-by-county data
-#We'll have to make a few assumptions on how the counties of Alaska voted
-reload_data = False
+reload_data = True
 if reload_data:
-    #Column 0 of Y contains the GOP vote fraction, i.e. GOP/(GOP+DEM)
-    #Column 1 of Y contains the total GOP+DEM # of votes
-    #From these numbers, you should be able to calculate the number of DEM votes or GOP votes
+    print "Importing data from spreadsheets..."
     Y = np.zeros((3140,2))
     g = xlrd.open_workbook('US_County_Level_Presidential_Results_08-16.xls')
     h = g.sheet_by_index(0)
@@ -322,82 +290,102 @@ if reload_data:
     #In our spreadsheet, that means start at row 31
     fips_indices = np.zeros((len(h.col_values(start_rowx=30, colx=1))))
     Y = np.zeros((len(h.col_values(start_rowx=31, colx=1)),2))
-    X = np.zeros((len(h.col_values(start_rowx=31, colx=1)),24))
+    X = np.zeros((len(h.col_values(start_rowx=31, colx=1)),25))
+    
+    print "Loading election data..."
     i = 0
     for fips_id in map(int,h.col_values(start_rowx=31, colx=1)):
+        #fips_indices keeps track of which county each row in X,Y corresponds to
         fips_indices[i] = fips_id
+        
+        #Column 0 of Y contains the GOP vote fraction, i.e. GOP/(GOP+DEM)
+        #Column 1 of Y contains the total GOP+DEM # of votes
+        #From these numbers, you should be able to calculate the number of DEM votes or GOP votes
         Y[i,1] = h.col_values(start_rowx=31, colx=2)[i] + h.col_values(start_rowx=31, colx=3)[i]
         Y[i,0] = h.col_values(start_rowx=31, colx=3)[i]/Y[i,1]
         
-        X[i,23] = h.col_values(start_rowx=31, colx=13)[i]+h.col_values(start_rowx=31, colx=14)[i]
-        X[i,1] = h.col_values(start_rowx=31, colx=14)[i]/X[i,23]
+        #Column 0 is the GOP fraction in 2012 (GOP/(GOP+DEM))
+        #Column 1 is the total votes cast in 2012 (GOP + DEM)
+        X[i,1] = h.col_values(start_rowx=31, colx=13)[i]+h.col_values(start_rowx=31, colx=14)[i]
+        X[i,0] = h.col_values(start_rowx=31, colx=14)[i]/X[i,1]
         
         i += 1
-    data_col = 1
-    #To make a nice plot national plot of the actual election results
-    #national_plot(fips_indices, Y[:,0], AK_value=0.5288700180057424)
-    #Population-based statistics first
-    X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'population_1970_2016.xls', 2015)
+
     data_col = 2
     
+    #To make a nice plot national plot of the actual election results
+    national_plot(fips_indices, Y[:,0], data_min = 0.0, data_max=1.0, vmin=-100.0, vmax=100.0, plt_title='National_vote_fraction', colorbar_label='Vote Margin [\%]', use_cmap=cm.seismic, AK_value=0.5288700180057424)
+
+    #Population-based statistics first
+    #Resident population
+    X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'population_1970_2016.xls', 2015)
+    data_col +=1
+    
+    #Next, get the population under the age of 18
+    X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'youth_population_1989_2015.xls', 2015)    
+    #Subtract one from the other to get # of eligible voters
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'subtraction', pop = X[:,2])
+    data_col += 1
+    
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'black_population_2009_2015.xls', 2015)
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'black_population_2009_2015.xls', 2009)
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'white_population_2009_2015.xls', 2015)      
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'white_population_2009_2015.xls', 2009)      
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'asian_population_2009_2015.xls', 2015)      
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'asian_population_2009_2015.xls', 2009)      
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'indian_population_2009_2015.xls', 2015)      
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'indian_population_2009_2015.xls', 2009)      
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'hispanic_population_2009_2015.xls', 2015)      
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'hispanic_population_2009_2015.xls', 2009)      
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'food_stamps_1989_2013.xls', 2013)
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'food_stamps_1989_2013.xls', 2008)
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,0]) 
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, data_col, 'population1000', pop = X[:,2]) 
     data_col += 1
     
-    #Voting fractions
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, 23, 'population1000', pop = X[:,0])
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, 1, 'Y_population1000', pop = X[:,0])
+    #Voting fractions- normalize not to total population, but to the eligible voters
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, 1, 'population', pop = X[:,3])
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, 1, 'Y_population', pop = X[:,3])
     
+    #Eligible voters
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, 3, 'population1000', pop = X[:,2])
     
     #Population density
-    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, 0, 'density')
+    X, Y, fips_indices = ld.normalize_data(X, Y, fips_indices, 2, 'density')
     
-    
-    #Next, rates & percents
+    #Next, rates & percents. Normalizing these doesn't have anything to do with population size
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices,'commuting_time_2009_2015.xls', 2015, 'fraction_of_hour')
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'unemployment_rate_1970_2017.xls','2016 October', 'percent')
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'unemployment_rate_1970_2017.xls','2007 October', 'percent')
@@ -408,19 +396,21 @@ if reload_data:
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'homeownership_rate_2009_2015.xls', 2015, 'percent')
     X, Y, fips_indices = ld.add_data_column(X, Y, fips_indices, 'income_inequality_2010_2015.xls', 2015, 'percent')
     
-    #Cut out a couple counties by hand that have weird population data
+    #Cut out a couple counties in South Dakota by hand that have weird population data
+    #Hopefully the data will be fixed soon and this step can be removed
     bad_counties = [46103, 46105, 46109, 46111] 
-    print X.shape
     for bad_county in bad_counties:
         index = np.argmin(np.abs(fips_indices[np.nonzero(fips_indices)]-bad_county))
         X = np.delete(X,index,axis=0)
         Y = np.delete(Y,index,axis=0)
         fips_indices = np.delete(fips_indices,index)
-    print X.shape
+
+    print "Done importing data!"
+    print "Saving to 'data.pk1'..."
     file = open('data.pk1', 'wb')
     pickle.dump([X,Y,fips_indices],file)
     file.close()
-
+    print "Done saving!"
 else:       
     print "Loading data..."
     file = open('data.pk1', 'rb')
@@ -428,20 +418,18 @@ else:
     file.close()     
     print "Done!"
 
-#national_plot(fips_indices, Y[:,1], data_min=0.3, data_max=0.7, vmin=30.0, vmax=70.0, plt_title='national_turnout', colorbar_label='Vote Turnout [\%]',use_cmap=cm.plasma, AK_value = False )
 
-#Initial Analysis: use PA as our control state (no electronic voting). PA FIPS codes begin with 42
-#Use Florida as the test state (maybe hacked). FL FIPS codes begin with 12
-#Coincidentally, PA and FL both have 67 counties. Who knew?
-#Train the neural net on all other states
-
+national_plot(fips_indices, Y[:,1], data_min=0.2, data_max=0.7, vmin=20.0, vmax=70.0, plt_title='national_turnout', colorbar_label='Vote Turnout [\%]',use_cmap=cm.plasma, AK_value = False )
 
 states_codes={'AL':'01','AZ':'04','AR':'05','CA':'06','CO':'08','CT':'09','DE':'10','FL':'12','GA':'13','HI':'15','ID':'16','IL':'17','IN':'18','IA':'19','KS':'20','KY':'21','LA':'22','ME':'23','MD':'24','MA':'25','MI':'26','MN':'27','MS':'28','MO':'29','MT':'30','NE':'31','NV':'32','NH':'33','NJ':'34','NM':'35','NY':'36','NC':'37','ND':'38','OH':'39','OK':'40','OR':'41','PA':'42','RI':'44','SC':'45','SD':'46','TN':'47','TX':'48','UT':'49','VT':'50','VA':'51','WA':'53','WV':'54','WI':'55','WY':'56'}
 states=['AL','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY']
+
+#For calculating electoral impact, in the future
 electoral_votes = [9,11,6,55,9,7,3,29,16,4,4,20,11,6,6,8,8,4,10,11,16,10,6,10,3,5,6,4,14,5,29,15,3,18,7,7,20,4,9,3,11,38,6,3,13,12,5,10,3]
 electoral_counts = dict(zip(states, electoral_votes))
 
-def run_neural_net(test_state, plot_state=False, states=states_codes):
+#data_series is which column in Y do we want to look at
+def run_neural_net(test_state, data_series = 0, plot_state=False, states=states_codes):
     if test_state not in states:
         print "State not available!"
         return 0
@@ -466,11 +454,11 @@ def run_neural_net(test_state, plot_state=False, states=states_codes):
         for i in range(len(fips_indices)):
             if int(fips_indices[i])>fips_min and int(fips_indices[i])<fips_max:
                 test_inputs[i,:] = X[i,:]
-                test_results[i] = Y[i,1]
+                test_results[i] = Y[i,data_series]
                 test_fips[i] = int(fips_indices[i])
             else:
                 training_inputs[i,:] = X[i,:]
-                training_results[i] = Y[i,1]
+                training_results[i] = Y[i,data_series]
                 training_fips[i] = int(fips_indices[i])
         
         trials = 10
@@ -509,38 +497,45 @@ def run_neural_net(test_state, plot_state=False, states=states_codes):
         if plot_state:
             state_plot_data_model(test_fips, test_results, test_outputs, test_state)
             state_plot_residual(training_inputs, training_outputs, training_results, training_fips, test_inputs, test_outputs, test_results, test_fips, test_state)
-        
+        """
         sigmas = np.zeros((len(test_fips)))
         i = 0
         for id in test_fips:
             sigmas[i] = sigma(id, test_results-test_outputs, test_inputs, test_fips, training_results, training_outputs, training_inputs, training_fips)
             i += 1
+        """
+            
+        return (test_results-test_outputs), test_fips
         
-        return (test_results-test_outputs), test_fips, sigmas
         
-#run_neural_net('FL', plot_state=True, states=states_codes)
+run_neural_net('FL', data_series= 0, plot_state=True, states=states_codes)
 
 
 #Concatenate the state-by-state results into national residuals plots
+#First, vote fraction
+
 start_index = 0
-results = np.zeros((3140, 3))
+results = np.zeros((3140, 2))
 for state in states:
     print state
-    resids, test_fips, sigmas = run_neural_net(state, plot_state=False)
+    resids, test_fips = run_neural_net(state, data_series=0, plot_state=False)
     end_index = start_index + len(test_fips)
-    results[start_index:end_index,2] = sigmas
     results[start_index:end_index,1] = resids
     results[start_index:end_index,0] = test_fips
     start_index += len(test_fips)
 
-national_plot(results[:,0], results[:,1],data_min=-0.2, data_max=0.2, vmin=-20.0, vmax=20.0, plt_title = 'turnout_residmap',colorbar_label='Turnout Residual [\%]', AK_value=False)
-"""
-plt.hist(results[:,2], bins=np.linspace(-8, 8, 50),label='Data')
-x = np.linspace(-10.0, 10.0, 200)
-plt.plot(x, 350.*100./40.*np.exp(-x**2/2.0)/np.sqrt(np.pi*2.0),label='Normal Distribution')
-plt.legend()
-plt.xlabel('Significance [$\sigma$]')
-plt.ylabel('Number of Counties')
-plt.show()
-"""
-national_plot(results[:,0], results[:,2], data_min=-5.0, data_max=5.0, vmin=-5.0, vmax=5.0, plt_title= 'turnout_sigmas',colorbar_label='Significance [$\sigma$]', AK_value=False)
+national_plot(results[:,0], results[:,1],data_min=-0.2, data_max=0.2, vmin=-20.0, vmax=20.0, plt_title = 'national_residmap',colorbar_label='Vote Residual [\%]', AK_value=False)
+
+#Now, turnout
+start_index = 0
+results = np.zeros((3140, 2))
+for state in states:
+    print state
+    resids, test_fips = run_neural_net(state, data_series=1, plot_state=False)
+    end_index = start_index + len(test_fips)
+    results[start_index:end_index,1] = resids
+    results[start_index:end_index,0] = test_fips
+    start_index += len(test_fips)
+
+national_plot(results[:,0], results[:,1],data_min=-0.1, data_max=0.1, vmin=-10.0, vmax=10.0, plt_title = 'turnout_residmap',colorbar_label='Turnout Residual [\%]',use_cmap=cm.PuOr, AK_value=False)
+

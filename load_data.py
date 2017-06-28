@@ -95,8 +95,11 @@ def normalize_data(X, Y, fips_indices, data_col, norm_scheme, pop = np.zeros((10
     if norm_scheme == 'population1000':
         X[:,data_col] *= 0.001/pop
         
-    if norm_scheme == 'Y_population1000':
-        Y[:,data_col] *= 0.001/pop
+    if norm_scheme == 'Y_population':
+        Y[:,data_col] *= 1.0/pop
+        
+    if norm_scheme == 'subtraction':
+        X[:,data_col] = 1000.*pop-X[:,data_col]
 
     if norm_scheme == 'none':
         X[:,data_col] *= 1.0
