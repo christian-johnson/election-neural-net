@@ -10,14 +10,22 @@ import matplotlib.ticker as mtick
 import numpy as np
 
 #Set matplotlib parameters to be able to use Greek letters in plots
-rcParams['text.usetex'] = True
-rc('text.latex', preamble=r'\usepackage{amsmath}')
-rcParams['axes.labelsize'] = 20
-rcParams['axes.titlesize'] = 30
-rcParams['xtick.labelsize'] =14
-rcParams['ytick.labelsize'] =14
+#rcParams['text.usetex'] = True
+#rc('text.latex', preamble=r'\usepackage{amsmath}')
+rcParams['axes.labelsize'] = 12
+rcParams['axes.titlesize'] = 14
+rcParams['axes.labelcolor'] = '#787878'
+
+rcParams['xtick.labelsize'] =12
+rcParams['ytick.labelsize'] =12
 rcParams['xtick.major.size'] = 6
 rcParams['ytick.major.size'] = 6
+rcParams['xtick.color'] = '#787878'
+rcParams['ytick.color'] = '#787878'
+
+rcParams['text.color'] = '#787878'
+rcParams['font.size'] = 14
+
 
 
 def state_extent(name):
@@ -166,16 +174,16 @@ def state_plot_data_model(dataseries1, dataseries2, name, data_min, data_max, vm
 
 #Define plotting function, so we can see the results in a nice way
 def national_plot(dataseries, data_min, data_max, vmin, vmax, plt_title,colorbar_label, use_cmap = cm.seismic, AK_value = False):
-    fig = plt.figure(figsize=(14.0,6.3))
+    fig = plt.figure(figsize=(10.0,7.0))
     #Mainland
-    ax = plt.axes([0.25,0,0.75,1],projection=ccrs.Miller(), aspect=1.3, frameon=False)
-    ax.set_extent([-127.0,-65., 23.,43.])
+    ax = plt.axes([0.0,0.0,1.0,1.0],projection=ccrs.LambertConformal(central_longitude=-96.0, central_latitude=39.0, cutoff=-20), aspect=1.15, frameon=False)
+    ax.set_extent([-120.0,-74., 21.,47.])
     #Alaska
-    ax2 = plt.axes([0,0.3,0.27,0.6],projection=ccrs.Miller(), aspect=1.7, frameon=False)
-    ax2.set_extent([-180.0,-132., 47.,62.])
+    ax2 = plt.axes([0.0,0.0,0.26,0.26],projection=ccrs.LambertConformal(central_longitude=-156.0, central_latitude=53.5, cutoff=-20), aspect=1.3, frameon=False)
+    ax2.set_extent([-180.0,-132., 45.,62.])
     #Hawaii
-    ax3 = plt.axes([0.1, 0.05,0.2,0.3],projection=ccrs.Miller(), aspect=1.3, frameon=False)
-    ax3.set_extent([-162.0,-152., 18.,23.])
+    ax3 = plt.axes([0.25, 0.00,0.2,0.2],projection=ccrs.LambertConformal(central_longitude=-157.0, central_latitude=20.5, cutoff=-20), aspect=1.15, frameon=False)
+    ax3.set_extent([-162.0,-154., 18.,23.])
     filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
     the_lw = 0.0
     
@@ -210,7 +218,7 @@ def national_plot(dataseries, data_min, data_max, vmin, vmax, plt_title,colorbar
                 ax.add_geometries(state, crs=ccrs.Miller(), facecolor=facecolor, edgecolor=edgecolor, linewidth=the_lw) 
     
     filename = 'cb_2015_us_state_5m/cb_2015_us_state_5m.shp'  
-    the_lw = 0.5
+    the_lw = 0.25
     for state, record in zip(shpreader.Reader(filename).geometries(), shpreader.Reader(filename).records()):
         id = int(record.__dict__['attributes']['GEOID'])
         facecolor = use_cmap(0.0)
@@ -230,17 +238,22 @@ def national_plot(dataseries, data_min, data_max, vmin, vmax, plt_title,colorbar
     ax2.outline_patch.set_visible(False)
     ax3.background_patch.set_visible(False)
     ax3.outline_patch.set_visible(False)
-
     #Add colorbar
-    axc = plt.axes([0.93, 0.1, 0.02, 0.5], frameon=False)
+    axc = plt.axes([0.25, 0.95, 0.5, 0.012], frameon=False)
     cmap = use_cmap
     norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-    cb = mpl.colorbar.ColorbarBase(axc, cmap=cmap,norm=norm,orientation='vertical')
-    cbar_step=(vmax-vmin)/8
-    print ['{:.0f}\%'.format(x) for x in np.arange(vmin, vmax+cbar_step, cbar_step)]
-    cb.ax.set_yticklabels(['{:.0f}\%'.format(x) for x in np.arange(vmin, vmax+cbar_step, cbar_step)])
-    cb.set_label(colorbar_label)
-    
+    num_ticks = 9
+    cbar_step=(vmax-vmin)/(num_ticks-1)
+    print cbar_step
+    print np.linspace(vmin, vmax, num_ticks)
+    print ['{:.0f}%'.format(x) for x in np.arange(vmin, vmax+cbar_step, cbar_step)]
+    cb = mpl.colorbar.ColorbarBase(axc, ticks=np.linspace(vmin, vmax, num_ticks),cmap=cmap,norm=norm,orientation='horizontal')
+    cb.set_ticklabels(['{:.0f}%'.format(x) for x in np.arange(vmin, vmax+cbar_step, cbar_step)])
+    cb.ax.xaxis.set_ticks_position('top')
+
+    cb.set_label(colorbar_label, fontdict = {
+        'horizontalalignment' : 'center'
+        })
     plt.savefig('plots/'+str(plt_title)+'.pdf',bbox_inches='tight')
     #plt.show()
     return 0

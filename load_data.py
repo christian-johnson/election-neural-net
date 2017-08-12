@@ -4,10 +4,13 @@ import numpy as np
 import pandas as pd
 import plotter
 from matplotlib import cm
+import cartopy.io.shapereader as shpreader
 
 #tf.logging.set_verbosity(tf.logging.INFO)
 
 #Load data from Excel, CSV files into pandas DataFrames
+
+acres_to_m2 = 4047.
 
 def load_data():
     print "Adding data from spreadsheets..."
@@ -18,6 +21,7 @@ def load_data():
     population = pd.read_excel('data_spreadsheets/population_1970_2016.xls','Sheet0', index_col=0, header=1, skiprows=0, parse_cols=range(2,50))
     #Population is in thousands in the spreadsheet, we need to multiply everything by 1000.0:
     population = pd.DataFrame(population.values*1000.0, index=population.index, columns=population.columns)
+    
     youth_population = pd.read_excel('data_spreadsheets/youth_population_1989_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, parse_cols=range(2,100))
     black_population = pd.read_excel('data_spreadsheets/black_population_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, parse_cols=range(2,100))
     white_population = pd.read_excel('data_spreadsheets/white_population_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, parse_cols=range(2,100))
@@ -38,31 +42,123 @@ def load_data():
     religion = pd.read_stata('data_spreadsheets/religion.dta')
     religion = religion.fillna(0.0)
     evangelicals = pd.DataFrame(religion.loc[:,'evanadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Evangelical'])
-    #plotter.national_plot(evangelicals,data_min=0.0, data_max=0.85, vmin=0.0, vmax=85.0, plt_title='Evangelical',colorbar_label='Evangelical Protestant [\%]', use_cmap=cm.Reds, AK_value=False)
     
     protestant = pd.DataFrame(religion.loc[:,'mprtadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Protestant'])
     blackprotestant = pd.DataFrame(religion.loc[:,'bprtadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['BlackProtestant'])
     catholic = pd.DataFrame(religion.loc[:,'cathadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Catholic'])
-    #plotter.national_plot(catholic,data_min=0.0, data_max=0.3, vmin=0.0, vmax=30.0, plt_title='Catholic',colorbar_label='Catholic [\%]', use_cmap=cm.BuPu, AK_value=False)
     
-    #Multiple types of Judaism
-    jewish = pd.DataFrame( religion.loc[:,'cjudadh'].div( religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish'])
-    jewish.add(pd.DataFrame( religion.loc[:,'ojudadh'].div( religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish']))
-    jewish.add(pd.DataFrame( religion.loc[:,'rjudadh'].div( religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish']))
-    jewish.add(pd.DataFrame( religion.loc[:,'rfrmadh'].div(religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish']))
+    #Multiple types of Judaism- add them up into a single group
+    jewish = pd.DataFrame(religion.loc[:,'cjudadh'].div( religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish'])
+    jewish.add(pd.DataFrame(religion.loc[:,'ojudadh'].div( religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish']))
+    jewish.add(pd.DataFrame(religion.loc[:,'rjudadh'].div( religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish']))
+    jewish.add(pd.DataFrame(religion.loc[:,'rfrmadh'].div(religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish']))
     
-    muslim = pd.DataFrame(religion.loc[:,'mslmadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Muslim'])
-    #plotter.national_plot(muslim,data_min=0.0, data_max=0.1, vmin=0.0, vmax=10.0, plt_title='Muslim',colorbar_label='Muslim [\%]', use_cmap=cm.Greens, AK_value=False)
-    
+    muslim = pd.DataFrame(religion.loc[:,'mslmadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Muslim'])    
     mormon = pd.DataFrame(religion.loc[:,'ldsadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Mormon'])
-    #plotter.national_plot(mormon,data_min=0.0, data_max=0.75, vmin=0.0, vmax=75.0, plt_title='Mormons',colorbar_label='Mormon [\%]', use_cmap=cm.Blues, AK_value=False)
     
-    #protestant = pd.DataFrame(map(float,religion[religion.columns[1061]][1:].values),index=map(int,religion['FIPS'][1:]),columns=['Protestant'])
-    #blackprotestant = pd.DataFrame(map(float,religion[religion.columns[1184]][1:].values),index=map(int,religion['FIPS'][1:]),columns=['BlackProtestant'])
-    #catholic = pd.DataFrame(map(float,religion[religion.columns[1310]][1:].values),index=map(int,religion['FIPS'][1:]),columns=['Catholic'])
-    #jewish = pd.DataFrame(map(float,religion[religion.columns[1376]][1:].values),index=map(int,religion['FIPS'][1:]),columns=['Jewish'])
-    #muslim = pd.DataFrame(map(float,religion[religion.columns[1337]][1:].values),index=map(int,religion['FIPS'][1:]),columns=['Muslim'])
-    #mormon = pd.DataFrame(map(float,religion[religion.columns[1369]][1:].values),index=map(int,religion['FIPS'][1:]),columns=['Mormon'])
+    climatechange = pd.read_csv('data_spreadsheets/yale_climate_change.csv')
+    
+    #Agricultural data:
+    
+    #Get county areas, in m^2
+    filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
+    geometries = pd.DataFrame([y[0].__dict__['attributes'] for y in zip(shpreader.Reader(filename).records())])
+    geometries.index = map(int,map(str,geometries['GEOID']))
+
+    #Corn planted
+    corn_planted = pd.read_csv('data_spreadsheets/corn_planted_2016.csv')
+    corn_planted = corn_planted[np.isfinite(corn_planted['County ANSI'])]
+    corn_planted = corn_planted[np.isfinite(corn_planted['State ANSI'])]
+    acres_planted = map(str,corn_planted['Value'].values)
+    corn_indices = [None]*len(acres_planted)
+    corn_planted.index = range(len(corn_planted))
+    for i in range(len(acres_planted)):
+        if ',' in acres_planted[i]:
+            acres_planted[i] = acres_to_m2*float(acres_planted[i].split(',')[0]+acres_planted[i].split(',')[1])
+        else:
+            acres_planted[i] = acres_to_m2*float(acres_planted[i])
+        if len(str(int(float(corn_planted.loc[i,'County ANSI']))))>2:
+            corn_indices[i] = int(float(str(corn_planted.loc[i,'State ANSI'])+str(corn_planted.loc[i,'County ANSI'])))
+        elif len(str(int(float(corn_planted.loc[i,'County ANSI']))))>1:
+            corn_indices[i] = int(float(str(corn_planted.loc[i,'State ANSI'])+'0'+str(corn_planted.loc[i,'County ANSI'])))
+        else:
+            corn_indices[i] = int(float(str(corn_planted.loc[i,'State ANSI'])+'00'+str(corn_planted.loc[i,'County ANSI'])))
+        
+    corn = pd.DataFrame(acres_planted, index=corn_indices, columns=['Corn'])
+
+    for corn_index,corn_row in corn.iterrows():
+        corn.loc[corn_index,'Corn'] = corn_row[0]/geometries.loc[corn_index]['ALAND']
+
+    #Cotton planted
+    cotton_planted = pd.read_csv('data_spreadsheets/cotton_planted_2016.csv')
+    cotton_planted = cotton_planted[np.isfinite(cotton_planted['County ANSI'])]
+    cotton_planted = cotton_planted[np.isfinite(cotton_planted['State ANSI'])]
+    acres_planted = map(str,cotton_planted['Value'].values)
+    cotton_indices = [None]*len(acres_planted)
+    cotton_planted.index = range(len(cotton_planted))
+    for i in range(len(acres_planted)):
+        if ',' in acres_planted[i]:
+            acres_planted[i] = acres_to_m2*float(acres_planted[i].split(',')[0]+acres_planted[i].split(',')[1])
+        else:
+            acres_planted[i] = acres_to_m2*float(acres_planted[i])
+        if len(str(int(float(cotton_planted.loc[i,'County ANSI']))))>2:
+            cotton_indices[i] = int(float(str(cotton_planted.loc[i,'State ANSI'])+str(cotton_planted.loc[i,'County ANSI'])))
+        elif len(str(int(float(cotton_planted.loc[i,'County ANSI']))))>1:
+            cotton_indices[i] = int(float(str(cotton_planted.loc[i,'State ANSI'])+'0'+str(cotton_planted.loc[i,'County ANSI'])))
+        else:
+            cotton_indices[i] = int(float(str(cotton_planted.loc[i,'State ANSI'])+'00'+str(cotton_planted.loc[i,'County ANSI'])))
+        
+    cotton = pd.DataFrame(acres_planted, index=cotton_indices, columns=['Cotton'])
+
+    for cotton_index,cotton_row in cotton.iterrows():
+        cotton.loc[cotton_index,'Cotton'] = cotton_row[0]/geometries.loc[cotton_index]['ALAND']
+    #Soybeans planted
+    soybeans_planted = pd.read_csv('data_spreadsheets/soybeans_planted_2016.csv')
+    soybeans_planted = soybeans_planted[np.isfinite(soybeans_planted['County ANSI'])]
+    soybeans_planted = soybeans_planted[np.isfinite(soybeans_planted['State ANSI'])]
+    acres_planted = map(str,soybeans_planted['Value'].values)
+    soybeans_indices = [None]*len(acres_planted)
+    soybeans_planted.index = range(len(soybeans_planted))
+    for i in range(len(acres_planted)):
+        if ',' in acres_planted[i]:
+            acres_planted[i] = acres_to_m2*float(acres_planted[i].split(',')[0]+acres_planted[i].split(',')[1])
+        else:
+            acres_planted[i] = acres_to_m2*float(acres_planted[i])
+        if len(str(int(float(soybeans_planted.loc[i,'County ANSI']))))>2:
+            soybeans_indices[i] = int(float(str(soybeans_planted.loc[i,'State ANSI'])+str(soybeans_planted.loc[i,'County ANSI'])))
+        elif len(str(int(float(soybeans_planted.loc[i,'County ANSI']))))>1:
+            soybeans_indices[i] = int(float(str(soybeans_planted.loc[i,'State ANSI'])+'0'+str(soybeans_planted.loc[i,'County ANSI'])))
+        else:
+            soybeans_indices[i] = int(float(str(soybeans_planted.loc[i,'State ANSI'])+'00'+str(soybeans_planted.loc[i,'County ANSI'])))
+        
+    soybeans = pd.DataFrame(acres_planted, index=soybeans_indices,columns=['Soybeans'])
+
+    for soybeans_index,soybeans_row in soybeans.iterrows():
+        soybeans.loc[soybeans_index,'Soybeans'] = soybeans_row[0]/geometries.loc[soybeans_index]['ALAND']
+    
+    #Winter Wheat planted
+    winter_wheat_planted = pd.read_csv('data_spreadsheets/winter_wheat_planted_2016.csv')
+    winter_wheat_planted = winter_wheat_planted[np.isfinite(winter_wheat_planted['County ANSI'])]
+    winter_wheat_planted = winter_wheat_planted[np.isfinite(winter_wheat_planted['State ANSI'])]
+    acres_planted = map(str,winter_wheat_planted['Value'].values)
+    winter_wheat_indices = [None]*len(acres_planted)
+    winter_wheat_planted.index = range(len(winter_wheat_planted))
+    for i in range(len(acres_planted)):
+        if ',' in acres_planted[i]:
+            acres_planted[i] = acres_to_m2*float(acres_planted[i].split(',')[0]+acres_planted[i].split(',')[1])
+        else:
+            acres_planted[i] = acres_to_m2*float(acres_planted[i])
+        if len(str(int(float(winter_wheat_planted.loc[i,'County ANSI']))))>2:
+            winter_wheat_indices[i] = int(float(str(winter_wheat_planted.loc[i,'State ANSI'])+str(winter_wheat_planted.loc[i,'County ANSI'])))
+        elif len(str(int(float(winter_wheat_planted.loc[i,'County ANSI']))))>1:
+            winter_wheat_indices[i] = int(float(str(winter_wheat_planted.loc[i,'State ANSI'])+'0'+str(winter_wheat_planted.loc[i,'County ANSI'])))
+        else:
+            winter_wheat_indices[i] = int(float(str(winter_wheat_planted.loc[i,'State ANSI'])+'00'+str(winter_wheat_planted.loc[i,'County ANSI'])))
+        
+    winter_wheat = pd.DataFrame(acres_planted, index=winter_wheat_indices,columns=['Winter_wheat'])
+
+    for winter_wheat_index,winter_wheat_row in winter_wheat.iterrows():
+        winter_wheat.loc[winter_wheat_index,'Winter_wheat'] = winter_wheat_row[0]/geometries.loc[winter_wheat_index]['ALAND']
     print "Done!"
 
 
@@ -89,6 +185,7 @@ def load_data():
         asian_population.loc[:,'2015'],
         indian_population.loc[:,'2015'],
         youth_population.loc[:,'2015'],
+        
         white_population.loc[:,'2009'],
         black_population.loc[:,'2009'],
         hispanic_population.loc[:,'2009'],
@@ -97,8 +194,8 @@ def load_data():
         youth_population.loc[:,'2009'],
         
         unemployment_rate_1.loc[:,'2016 November'],
+        unemployment_rate_1.loc[:,'2011 November'],
         unemployment_rate_1.loc[:,'2007 November'],
-        unemployment_rate_1.loc[:,'2004 November'],
     
         median_age.loc[:,'2015'],
         bachelors_degrees.loc[:,'2012'],
@@ -119,9 +216,15 @@ def load_data():
         catholic['Catholic'],
         jewish['Jewish'],
         muslim['Muslim'],
-        mormon['Mormon']
+        mormon['Mormon'],
+        
+        pd.DataFrame(climatechange[climatechange['GeoType']=='County']['human'].values,index=climatechange[climatechange['GeoType']=='County']['GEOID']),
+        
+        corn['Corn'],
+        cotton['Cotton'],
+        soybeans['Soybeans'],
+        winter_wheat['Winter_wheat']
     ],axis=1)
-
     data.columns=[
         'GOP2016',
         'GOP2012',
@@ -151,8 +254,8 @@ def load_data():
         'Youth2009',
     
         'Unemployment2016',
+        'Unemployment2011',
         'Unemployment2007',
-        'Unemployment2004',
     
         'MedianAge',
         'Bachelors',
@@ -173,25 +276,25 @@ def load_data():
         'Catholic',
         'Jewish',
         'Muslim',
-        'Mormon'
+        'Mormon',
+        
+        'ClimateChange',
+        
+        'Corn',
+        'Cotton',
+        'Soybeans',
+        'WinterWheat'
     ]
     
-    #Remove problem counties
-    if 46103 in data.index:
-        data = data.drop(46103)
-    if 46105 in data.index:
-        data = data.drop(46105)        
-    if 46109 in data.index:
-        data = data.drop(46109)
-    if 46111 in data.index:
-        data = data.drop(46111)
         
-    #Drop NaN values
-    data = data.dropna(how='any')
+    #Not all counties have crops grown in them
+    data['Corn'].fillna(0.0,inplace=True)
+    data['Cotton'].fillna(0.0,inplace=True)
+    data['Soybeans'].fillna(0.0,inplace=True)
+    data['WinterWheat'].fillna(0.0,inplace=True)
+    data = remove_problem_counties(data)
     
-    
-    
-    #Normalize columns:
+    #First, normalize by converting everything to percents, etc. Don't have to worry about training vs test data here
     #Turnout
     data['Turnout2012'] = (data['VotesDem2012'].add(data['VotesGOP2012'])).div(data['Population2012']-data['Turnout2012'])
     data['Turnout2016'] = (data['VotesDem2016'].add(data['VotesGOP2016'])).div(data['Population2016']-data['Turnout2016'])
@@ -209,13 +312,14 @@ def load_data():
     data['Asian2009'] = data['Asian2009'].div(data['Population2009'])
     data['Indian2009'] = data['Indian2009'].div(data['Population2009'])
     data['Youth2009'] = data['Youth2009'].div(data['Population2009'])
-
+    
     data['Unemployment2016'] = data['Unemployment2016'].div(100.0)
     data['Unemployment2007'] = data['Unemployment2007'].div(100.0)
-    data['Unemployment2004'] = data['Unemployment2004'].div(100.0)
+    data['Unemployment2011'] = data['Unemployment2011'].div(100.0)
 
     data['IncomeInequality'] = data['IncomeInequality'].div(100.0)
     data['MedianAge'] = data['MedianAge'].div(100.0)
+    
     data['RentBurdened2015'] = data['RentBurdened2015'].div(100.0)
     data['RentBurdened2010'] = data['RentBurdened2010'].div(100.0)
 
@@ -226,228 +330,40 @@ def load_data():
 
     data['Businesses2016'] = data['Businesses2016'].div(data['Population2016'])
     data['Businesses2009'] = data['Businesses2009'].div(data['Population2009'])
-
-    data['Population2016'] = data['Population2016'].div(np.max(data['Population2016'].values))
-    data['Population2012'] = data['Population2012'].div(np.max(data['Population2012'].values))
-    data['Population2009'] = data['Population2009'].div(np.max(data['Population2009'].values))
-
-
+    
+    data['ClimateChange'] = data['ClimateChange'].div(100.0)
     return data
+    
+def remove_problem_counties(data):
+    if 46103 in data.index:
+        data = data.drop(46103)
+    if 46105 in data.index:
+        data = data.drop(46105)        
+    if 46109 in data.index:
+        data = data.drop(46109)
+    if 46111 in data.index:
+        data = data.drop(46111)
+    if 46102 in data.index:
+        data = data.drop(46102)
+    return data
+    
+def clean_data(data):
+    #Remove problem counties in South Dakota
 
-def fips_exceptions(fips_id):
-    #A number of counties have been rearranged over time or are otherwise weird
-    #e.g. Kalowao county in Hawaii is tiny and barely populated
-    #Bedford City, VA was independent, but merged with Bedford County in 2013
-    #Shannon County, SD was renamed Oglala Dakota County, and it's entirely within an Indian preservation so lots of data is missing
-    #Some counties in Alaska are also barely populated
-    old_ids = ['51515', '15005','2275']
-    #new_ids = ['51019', '02158', '46102', '02158']
-    if str(int(fips_id)) in old_ids:
-        return 1
-    else:
-        return 0
+    #Drop NaN values
+    data = data.dropna(how='any')
+    return data
+    
+# Vote Hacking 2: Electric Boogaloo
+#Better strategy to deal with test/training split:
+#Use all data in a GridSearch to find good parameters
 
+#Test data is state we're interested in
+#Training data is every other county
 
-def add_data_column(X, Y, fips_indices, filename, date, data_col, norm_scheme = 'none', norm_factor=1.0):
-    #Arguments: X: old data matrix
-    #fips_indices: vector which contains the FIPS indices in the order of the output data
-    #year: string of year/date of the data we want
-    #data_col: which column we add data to in X
-    
-    print "Adding data: " + str(filename)
-    
-    #Find the correct column in the spreadsheet- e.g. if you want data from 2015, find the column labeled '2015'
-    g = xlrd.open_workbook('data_spreadsheets/'+filename)
-    found_col = False
-    j = 0
-    while not found_col:
-        if j>2:
-            print "Requested date not found!"
-            return X, Y, fips_indices
-        h = g.sheet_by_index(j)
-        sheet_keys = map(str, h.row_values(start_colx = 3, rowx=1))
-        sheet_values = map(int,range(3,3+len(h.row_values(start_colx = 3, rowx=1))))
-        sheet_dict = dict(zip(sheet_keys, sheet_values))
-        if str(date) in sheet_dict:
-            spreadsheet_col = sheet_dict[str(date)]
-            found_col = True
-        else:
-            j += 1
-    
-    
-    tot_filled_vals = 0
-    
-    #Load the data into X, county-by-county. Loop through the array fips_indices so that we don't try to find a county that isn't there
-    j = 0
-    found_rows = np.zeros((4000))-0.01
-    spreadsheet_fips = map(int,h.col_values(start_rowx=2, colx=2))
-    spreadsheet_values = h.col_values(start_rowx=2, colx=spreadsheet_col)
-    for fips_index in map(int,fips_indices):
-        if fips_index in spreadsheet_fips:
-            spreadsheet_row = spreadsheet_fips.index(fips_index)
-            
-            X_row = map(int,fips_indices).index(fips_index)
-            value = spreadsheet_values[spreadsheet_row]
-            if value != '':
-                X[X_row, data_col] = value
-                found_rows[j] = X_row
-                j += 1
-    found_rows = found_rows[np.nonzero(found_rows+0.01)]
-    found_rows=map(int,found_rows)
-    """
-    for value in h.col_values(start_rowx=2, colx=spreadsheet_col):
-        spreadsheet_fips = int(h.col_values(start_rowx=2, colx=2)[j])
-        #If the FIPS code in the spreadsheet matches the FIPS code of the election data, everything is good
-        if spreadsheet_fips in map(int,fips_indices):
-            X_row = map(int,fips_indices).index(spreadsheet_fips)
-            if value == '':
-                #Missing data gets a value of -0.01 to keep track of it
-                X[X_row, data_col] = -0.01
-            else:
-                X[X_row, data_col] = value
-                tot_filled_vals += 1
-            j += 1
-        #If there's a weird exception, ignore that county data                 
-        elif fips_exceptions(spreadsheet_fips):
-            j += 1
-        else:
-            j += 1
-    #Remove rows that were missing:
-    Y = Y[np.nonzero(X[:,data_col]!=-0.01)]
-    fips_indices = fips_indices[np.nonzero(X[:,data_col]!=-0.01)]
-    X = X[np.nonzero(X[:,data_col]!=-0.01)]
-    """
-    #Normalize the column in an appropriate way
-    if norm_scheme:
-        X, Y, fips_indices = normalize_data(X, Y, fips_indices, data_col, norm_scheme, norm_factor)
-    #Return the new data matrix X
-    return X[found_rows], Y[found_rows], fips_indices[found_rows]
-        
-#Lots of counties don't grow particular crops, so we assume if it's not in the spreadsheet, that county doesn't grow any
-#Return fraction of the county land that is used for growing each crop
-def add_agriculture_data(X,Y,fips_indices, filename, norm_schme='none'):
-    print "Adding data: " + str(filename)
-    #Find the sheet & column in the data file corresponding to the requested year/date
-    g = xlrd.open_workbook('data_spreadsheets/'+filename)
-    found_col = False
-    j = 0
-    while not found_col:
-        if j>2:
-            print "Requested date not found!"
-            return X, Y, fips_indices
-        h = g.sheet_by_index(j)
-        sheet_keys = map(str, h.row_values(start_colx = 3, rowx=1))
-        sheet_values = map(int,range(3,3+len(h.row_values(start_colx = 3, rowx=1))))
-        sheet_dict = dict(zip(sheet_keys, sheet_values))
-        if str(date) in sheet_dict:
-            spreadsheet_col = sheet_dict[str(date)]
-            found_col = True
-        else:
-            j += 1
-            
-    #Find the next available column in the data matrix X
-    data_col = 0
-    while len(np.nonzero(X[:,data_col])[0])>0:
-        data_col += 1
-    
-    #Load the data into X, county-by-county. j loops through the spreadsheet rows
-    j = 0
-    for value in h.col_values(start_rowx=2, colx=spreadsheet_col):
-        spreadsheet_fips = int(h.col_values(start_rowx=2, colx=2)[j])
-        #If the FIPS code in the spreadsheet matches the FIPS code of the election data, everything is good
-        if spreadsheet_fips in map(int,fips_indices):
-            X_row = map(int,fips_indices).index(spreadsheet_fips)
-            if value == '':
-                #Missing data gets a value of 0
-                X[X_row, data_col] = 0.0
-            else:
-                if value == 0.0:
-                    X[X_row, data_col] = 0.01
-                else:
-                    X[X_row, data_col] = value
-                tot_filled_vals += 1
-            j += 1
-        #If there's a weird exception, ignore that county data                 
-        elif fips_exceptions(spreadsheet_fips):
-            j += 1
-        else:
-            j += 1
-    #Normalize the column in an appropriate way
-    X, Y, fips_indices = normalize_data(X, Y, fips_indices, data_col, norm_scheme, norm_factor)
-    #Return the new data matrix X
-    return X, Y, fips_indices
+#Apply data scaling to training data only
+#Train using cross-validation metrics; scikit-learn can do this?
+#Once trained, apply to test state
 
-        
-def add_religion_data(X,Y,fips_indices):
-    file = open('data_spreadsheets/religion.pk1','rb')
-    g = pickle.load(file)
-    file.close()
-    #7 major religions
-    start_col = np.max(np.nonzero(X[0,:]))+1
-    print start_col
-    print start_col +7
-    for fips_index in fips_indices:
-        row = np.argmin(np.abs(g[:,0]-fips_index))
-        X[np.argmin(np.abs(fips_indices-fips_index)),start_col:start_col+7] = g[row,1:]*0.01
-    return X,Y, fips_indices
-    
-#Here we normalize everything to [0, 1.0], and remove rows that are incomplete.
-#There should be enough complete rows to get the neural net to be trained well
-def normalize_data(X, Y, fips_indices, data_col, norm_scheme, norm_factor=1.0, pop = np.zeros((1000))):
-    #Commute times are listed in minutes- report as fraction of an hour
-    if norm_scheme =='fraction_of_hour':
-        X[:,data_col] *= 1.0/60.0
-    if norm_scheme == 'percent':
-        X[:,data_col] *= 1.0/100.0
-        
-    if norm_scheme == 'population':
-        X[:,data_col] *= 1.0/pop
-        
-    if norm_scheme == 'population1000':
-        X[:,data_col] *= 0.001/pop
-        
-    if norm_scheme == 'Y_population':
-        Y[:,data_col] *= 1.0/pop
-        
-    if norm_scheme == 'subtraction':
-        X[:,data_col] = 1000.*pop-X[:,data_col]
-
-    if norm_scheme == 'none':
-        X[:,data_col] *= 1.0
-        
-    if norm_scheme == 'migration':
-        X[:,data_col] *= 0.001/pop
-        X[:,data_col] = (X[:,data_col]-np.min(X[:,data_col]))/np.max(X[:,data_col])
-        
-    #Spread everything out between 0 and 1
-    if norm_scheme =='renormalize':
-        #print "Min of data: " + str(np.min(X[:,data_col]))
-        #print "Max of data: " + str(np.max(X[:,data_col]))
-        X[:,data_col] = (X[:,data_col]-np.min(X[:,data_col]))/(np.max(X[:,data_col])-np.min(X[:,data_col]))
-        #print "Min of renormalized data: " + str(np.min(X[:,data_col]))
-        #print "Max of renormalized data: " + str(np.max(X[:,data_col]))
-        #print np.histogram(X[:,data_col], bins=np.linspace(-0.0, 1.0, 50))
-        
-    if norm_scheme == 'density':
-        good_indices = []
-        filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
-        for record in shpreader.Reader(filename).records():
-            shp_fips = int(record.__dict__['attributes']['GEOID'])
-            if shp_fips in fips_indices:
-                shp_area = record.__dict__['attributes']['ALAND']
-                the_index = int(np.argmin(np.abs(fips_indices-shp_fips)))
-                if shp_area == 0.0:
-                    print record
-                X[the_index,data_col] *= float(norm_factor)/float(shp_area)
-                good_indices.append(the_index)
-        Y = Y[good_indices,:]
-        fips_indices = fips_indices[good_indices]
-        X = X[good_indices,:]
-        
-    #Y = Y[np.nonzero(X[:,data_col])[0],:]
-    #fips_indices = fips_indices[np.nonzero(X[:,data_col])[0]]
-    #X = X[np.nonzero(X[:,data_col])[0],:]
-        
-    return X, Y, fips_indices
-    
-    
+#Take a look at correlation values to see which parameters are useful/useless
+#(Preview of blog post #3- what are the important factors in prediction?)
