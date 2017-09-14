@@ -37,7 +37,7 @@ def load_data():
     homeownership_rate = pd.read_excel('data_spreadsheets/homeownership_rate_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, parse_cols=range(2,100))
     income_inequality = pd.read_excel('data_spreadsheets/income_inequality_2010_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, parse_cols=range(2,100))
     business_establishments = pd.read_excel('data_spreadsheets/business_establishments_1990_2016.xls','Sheet0', index_col=0, header=1, skiprows=0, parse_cols=range(2,200))
-    
+    median_income = pd.read_excel('data_spreadsheets/median_income_1989_2014.xls','Sheet0', index_col=0, header=1, skiprows=0, parse_cols=range(2,200))
     #Religion data from CSV files
     religion = pd.read_stata('data_spreadsheets/religion.dta')
     religion = religion.fillna(0.0)
@@ -164,6 +164,7 @@ def load_data():
 
     #Combine relevant data into a single DataFrame
     data= pd.concat([
+        election_results.loc[:,'per_gop_2016']-election_results.loc[:,'per_gop_2012'],
         election_results.loc[:,'per_gop_2016'],
         election_results.loc[:,'per_gop_2012'],
         
@@ -178,6 +179,7 @@ def load_data():
         population.loc[:,'2016'],
         population.loc[:,'2012'],
         population.loc[:,'2009'],
+        population.loc[:,'1980'],
 
         white_population.loc[:,'2015'],
         black_population.loc[:,'2015'],
@@ -223,9 +225,11 @@ def load_data():
         corn['Corn'],
         cotton['Cotton'],
         soybeans['Soybeans'],
-        winter_wheat['Winter_wheat']
+        winter_wheat['Winter_wheat'],
+        median_income.loc[:,'2014']
     ],axis=1)
     data.columns=[
+        'GOPChange',
         'GOP2016',
         'GOP2012',
         
@@ -239,6 +243,7 @@ def load_data():
         'Population2016',
         'Population2012',
         'Population2009',
+        'Population1980',
     
         'White2015',
         'Black2015',
@@ -283,7 +288,8 @@ def load_data():
         'Corn',
         'Cotton',
         'Soybeans',
-        'WinterWheat'
+        'WinterWheat',
+        'MedianIncome'
     ]
     
         
@@ -353,17 +359,3 @@ def clean_data(data):
     #Drop NaN values
     data = data.dropna(how='any')
     return data
-    
-# Vote Hacking 2: Electric Boogaloo
-#Better strategy to deal with test/training split:
-#Use all data in a GridSearch to find good parameters
-
-#Test data is state we're interested in
-#Training data is every other county
-
-#Apply data scaling to training data only
-#Train using cross-validation metrics; scikit-learn can do this?
-#Once trained, apply to test state
-
-#Take a look at correlation values to see which parameters are useful/useless
-#(Preview of blog post #3- what are the important factors in prediction?)

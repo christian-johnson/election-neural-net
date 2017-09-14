@@ -244,9 +244,6 @@ def national_plot(dataseries, data_min, data_max, vmin, vmax, plt_title,colorbar
     norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
     num_ticks = 9
     cbar_step=(vmax-vmin)/(num_ticks-1)
-    print cbar_step
-    print np.linspace(vmin, vmax, num_ticks)
-    print ['{:.0f}%'.format(x) for x in np.arange(vmin, vmax+cbar_step, cbar_step)]
     cb = mpl.colorbar.ColorbarBase(axc, ticks=np.linspace(vmin, vmax, num_ticks),cmap=cmap,norm=norm,orientation='horizontal')
     cb.set_ticklabels(['{:.0f}%'.format(x) for x in np.arange(vmin, vmax+cbar_step, cbar_step)])
     cb.ax.xaxis.set_ticks_position('top')
