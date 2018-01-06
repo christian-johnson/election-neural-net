@@ -111,4 +111,4 @@ linearModel.countyPlot(pd.Series(index=linearModel.data.index, data=pd.concat([l
 print("RMS MLP = " + str(100.0*mlpModel.rmsModel()) + "%")
 print("RMS Random Forest = " + str(100.0*randomforestModel.rmsModel()) + "%")
 print("RMS Elastic = " + str(100.0*linearModel.rmsModel()) + "%")
-print("RMS Ensemble = " + str(100.0*np.sqrt(np.mean((pd.concat([linearModel.results,linearModel.results,linearModel.results], axis=1).mean(axis=1).values)**2))))
+print("RMS Ensemble = " + str(100.0*np.sqrt(np.mean((pd.concat([linearModel.results,mlpModel.results,randomforestModel.results], axis=1).mean(axis=1).values)**2))))

@@ -149,6 +149,7 @@ attribs = [
         'Mormon',
         'MedianIncome'
     ]
+
 class ElectionAnalysis():
     """
     A general class for analyzing election data with machine learning.
@@ -158,9 +159,11 @@ class ElectionAnalysis():
     def __init__(self, regressionType = 'Linear', numDivisions = 50, attributes = attribs):
         self.regressionType = regressionType
         self.numDivisions = numDivisions
-        self.attributes = attributes
+        self.attributes = attribs
         self.results = pd.Series()
         self.stateCodes={'AL':'01','AZ':'04','AR':'05','CA':'06','CO':'08','CT':'09','DE':'10','FL':'12','GA':'13','HI':'15','ID':'16','IL':'17','IN':'18','IA':'19','KS':'20','KY':'21','LA':'22','ME':'23','MD':'24','MA':'25','MI':'26','MN':'27','MS':'28','MO':'29','MT':'30','NE':'31','NV':'32','NH':'33','NJ':'34','NM':'35','NY':'36','NC':'37','ND':'38','OH':'39','OK':'40','OR':'41','PA':'42','RI':'44','SC':'45','SD':'46','TN':'47','TX':'48','UT':'49','VT':'50','VA':'51','WA':'53','WV':'54','WI':'55','WY':'56'}
+        self.acres_to_m2 = 4047.
+
         if regressionType == 'Linear':
             self.regressor = ElasticNet(alpha=0.001, l1_ratio=0.1)
         elif regressionType == 'MLP':
@@ -168,11 +171,365 @@ class ElectionAnalysis():
         elif regressionType == 'RandomForest':
             self.regressor = RandomForestRegressor(max_features=30, n_estimators=200)
 
+
+    def removeProblemCounties(self):
+        if 46103 in self.data.index:
+            self.data = self.data.drop(46103)
+        if 46105 in self.data.index:
+            self.data = self.data.drop(46105)
+        if 46109 in self.data.index:
+            self.data = self.data.drop(46109)
+        if 46111 in self.data.index:
+            self.data = self.data.drop(46111)
+        if 46102 in self.data.index:
+            self.data = self.data.drop(46102)
+
     def loadData(self):
         """
         Load data into memory from various spreadsheets & databases in the folder 'data_spreadsheets/'
         """
-        self.data = ld.load_data()
+
+        #Election data
+        election_results = pd.read_excel('data_spreadsheets/US_County_Level_Presidential_Results_08-16.xls', 'Sheet 1', index_col=0, header=1, usecols=list(range(1,100)), skiprows=range(2,31))
+
+        alabama_special_election_results = pd.read_excel('data_spreadsheets/alabama_special_election2017.xlsx', 'Sheet 1', index_col=0, header=1, usecols=list(range(1,100)))
+        #Data from St. Louis GeoFRED
+        food_stamps = pd.read_excel('data_spreadsheets/food_stamps_1989_2013.xls','Sheet0', index_col=0, header=0, usecols=[2,3,7,9]+list(range(11,28)))
+        population = pd.read_excel('data_spreadsheets/population_1970_2016.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,50)))
+        #Population is in thousands in the spreadsheet, we need to multiply everything by 1000.0:
+        population = pd.DataFrame(population.values*1000.0, index=population.index, columns=population.columns)
+
+        youth_population = pd.read_excel('data_spreadsheets/youth_percent_1989_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        black_population = pd.read_excel('data_spreadsheets/black_population_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        white_population = pd.read_excel('data_spreadsheets/white_population_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        asian_population = pd.read_excel('data_spreadsheets/asian_population_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        indian_population = pd.read_excel('data_spreadsheets/indian_population_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        hispanic_population = pd.read_excel('data_spreadsheets/hispanic_population_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        commute_time = pd.read_excel('data_spreadsheets/commuting_time_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,50)))
+        unemployment_rate_0 = pd.read_excel('data_spreadsheets/unemployment_rate_1970_2017.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,400)))
+        unemployment_rate_1 = pd.read_excel('data_spreadsheets/unemployment_rate_1970_2017.xls','Sheet1', index_col=0, header=1, skiprows=0, usecols=list(range(2,400)))
+        bachelors_degrees = pd.read_excel('data_spreadsheets/bachelors_2010_2012.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        median_age = pd.read_excel('data_spreadsheets/median_age_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        rent_burdened = pd.read_excel('data_spreadsheets/rent_burdened_2010_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        homeownership_rate = pd.read_excel('data_spreadsheets/homeownership_rate_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        income_inequality = pd.read_excel('data_spreadsheets/income_inequality_2010_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
+        business_establishments = pd.read_excel('data_spreadsheets/business_establishments_1990_2016.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,200)))
+        median_income = pd.read_excel('data_spreadsheets/median_income_1989_2014.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,200)))
+        #Religion data from CSV files
+        religion = pd.read_stata('data_spreadsheets/religion.dta')
+        religion = religion.fillna(0.0)
+        evangelicals = pd.DataFrame(religion.loc[:,'evanadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Evangelical'])
+
+        protestant = pd.DataFrame(religion.loc[:,'mprtadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Protestant'])
+        blackprotestant = pd.DataFrame(religion.loc[:,'bprtadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['BlackProtestant'])
+        catholic = pd.DataFrame(religion.loc[:,'cathadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Catholic'])
+
+        #Multiple types of Judaism- add them up into a single group
+        jewish = pd.DataFrame(religion.loc[:,'cjudadh'].div( religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish'])
+        jewish.add(pd.DataFrame(religion.loc[:,'ojudadh'].div( religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish']))
+        jewish.add(pd.DataFrame(religion.loc[:,'rjudadh'].div( religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish']))
+        jewish.add(pd.DataFrame(religion.loc[:,'rfrmadh'].div(religion.loc[:,'POP2010']).values,index= religion.loc[:,'fips'],columns=['Jewish']))
+
+        muslim = pd.DataFrame(religion.loc[:,'mslmadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Muslim'])
+        mormon = pd.DataFrame(religion.loc[:,'ldsadh'].div(religion.loc[:,'POP2010']).values,index=religion.loc[:,'fips'],columns=['Mormon'])
+
+        climatechange = pd.read_csv('data_spreadsheets/yale_climate_change.csv')
+
+        #Agricultural data:
+
+        #Get county areas, in m^2
+        filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
+        geometries = pd.DataFrame([y[0].__dict__['attributes'] for y in zip(shpreader.Reader(filename).records())])
+        geometries.index = list(map(int,map(str,geometries['GEOID'])))
+
+        #Corn planted
+        corn_planted = pd.read_csv('data_spreadsheets/corn_planted_2016.csv')
+        corn_planted = corn_planted[np.isfinite(corn_planted['County ANSI'])]
+        corn_planted = corn_planted[np.isfinite(corn_planted['State ANSI'])]
+        acres_planted = list(map(str,corn_planted['Value'].values))
+        corn_indices = [None]*len(acres_planted)
+        corn_planted.index = list(range(len(corn_planted)))
+        for i in list(range(len(acres_planted))):
+            if ',' in acres_planted[i]:
+                acres_planted[i] = self.acres_to_m2*float(acres_planted[i].split(',')[0]+acres_planted[i].split(',')[1])
+            else:
+                acres_planted[i] = self.acres_to_m2*float(acres_planted[i])
+            if len(str(int(float(corn_planted.loc[i,'County ANSI']))))>2:
+                corn_indices[i] = int(float(str(corn_planted.loc[i,'State ANSI'])+str(corn_planted.loc[i,'County ANSI'])))
+            elif len(str(int(float(corn_planted.loc[i,'County ANSI']))))>1:
+                corn_indices[i] = int(float(str(corn_planted.loc[i,'State ANSI'])+'0'+str(corn_planted.loc[i,'County ANSI'])))
+            else:
+                corn_indices[i] = int(float(str(corn_planted.loc[i,'State ANSI'])+'00'+str(corn_planted.loc[i,'County ANSI'])))
+
+        corn = pd.DataFrame(acres_planted, index=corn_indices, columns=['Corn'])
+
+        for corn_index,corn_row in corn.iterrows():
+            corn.loc[corn_index,'Corn'] = corn_row[0]/geometries.loc[corn_index]['ALAND']
+
+        #Cotton planted
+        cotton_planted = pd.read_csv('data_spreadsheets/cotton_planted_2016.csv')
+        cotton_planted = cotton_planted[np.isfinite(cotton_planted['County ANSI'])]
+        cotton_planted = cotton_planted[np.isfinite(cotton_planted['State ANSI'])]
+        acres_planted = list(map(str,cotton_planted['Value'].values))
+        cotton_indices = [None]*len(acres_planted)
+        cotton_planted.index = list(range(len(cotton_planted)))
+        for i in list(range(len(acres_planted))):
+            if ',' in acres_planted[i]:
+                acres_planted[i] = self.acres_to_m2*float(acres_planted[i].split(',')[0]+acres_planted[i].split(',')[1])
+            else:
+                acres_planted[i] = self.acres_to_m2*float(acres_planted[i])
+            if len(str(int(float(cotton_planted.loc[i,'County ANSI']))))>2:
+                cotton_indices[i] = int(float(str(cotton_planted.loc[i,'State ANSI'])+str(cotton_planted.loc[i,'County ANSI'])))
+            elif len(str(int(float(cotton_planted.loc[i,'County ANSI']))))>1:
+                cotton_indices[i] = int(float(str(cotton_planted.loc[i,'State ANSI'])+'0'+str(cotton_planted.loc[i,'County ANSI'])))
+            else:
+                cotton_indices[i] = int(float(str(cotton_planted.loc[i,'State ANSI'])+'00'+str(cotton_planted.loc[i,'County ANSI'])))
+
+        cotton = pd.DataFrame(acres_planted, index=cotton_indices, columns=['Cotton'])
+
+        for cotton_index,cotton_row in cotton.iterrows():
+            cotton.loc[cotton_index,'Cotton'] = cotton_row[0]/geometries.loc[cotton_index]['ALAND']
+        #Soybeans planted
+        soybeans_planted = pd.read_csv('data_spreadsheets/soybeans_planted_2016.csv')
+        soybeans_planted = soybeans_planted[np.isfinite(soybeans_planted['County ANSI'])]
+        soybeans_planted = soybeans_planted[np.isfinite(soybeans_planted['State ANSI'])]
+        acres_planted = list(map(str,soybeans_planted['Value'].values))
+        soybeans_indices = [None]*len(acres_planted)
+        soybeans_planted.index = list(range(len(soybeans_planted)))
+        for i in list(range(len(acres_planted))):
+            if ',' in acres_planted[i]:
+                acres_planted[i] = self.acres_to_m2*float(acres_planted[i].split(',')[0]+acres_planted[i].split(',')[1])
+            else:
+                acres_planted[i] = self.acres_to_m2*float(acres_planted[i])
+            if len(str(int(float(soybeans_planted.loc[i,'County ANSI']))))>2:
+                soybeans_indices[i] = int(float(str(soybeans_planted.loc[i,'State ANSI'])+str(soybeans_planted.loc[i,'County ANSI'])))
+            elif len(str(int(float(soybeans_planted.loc[i,'County ANSI']))))>1:
+                soybeans_indices[i] = int(float(str(soybeans_planted.loc[i,'State ANSI'])+'0'+str(soybeans_planted.loc[i,'County ANSI'])))
+            else:
+                soybeans_indices[i] = int(float(str(soybeans_planted.loc[i,'State ANSI'])+'00'+str(soybeans_planted.loc[i,'County ANSI'])))
+
+        soybeans = pd.DataFrame(acres_planted, index=soybeans_indices,columns=['Soybeans'])
+
+        for soybeans_index,soybeans_row in soybeans.iterrows():
+            soybeans.loc[soybeans_index,'Soybeans'] = soybeans_row[0]/geometries.loc[soybeans_index]['ALAND']
+
+        #Winter Wheat planted
+        winter_wheat_planted = pd.read_csv('data_spreadsheets/winter_wheat_planted_2016.csv')
+        winter_wheat_planted = winter_wheat_planted[np.isfinite(winter_wheat_planted['County ANSI'])]
+        winter_wheat_planted = winter_wheat_planted[np.isfinite(winter_wheat_planted['State ANSI'])]
+        acres_planted = list(map(str,winter_wheat_planted['Value'].values))
+        winter_wheat_indices = [None]*len(acres_planted)
+        winter_wheat_planted.index = list(range(len(winter_wheat_planted)))
+        for i in list(range(len(acres_planted))):
+            if ',' in acres_planted[i]:
+                acres_planted[i] = self.acres_to_m2*float(acres_planted[i].split(',')[0]+acres_planted[i].split(',')[1])
+            else:
+                acres_planted[i] = self.acres_to_m2*float(acres_planted[i])
+            if len(str(int(float(winter_wheat_planted.loc[i,'County ANSI']))))>2:
+                winter_wheat_indices[i] = int(float(str(winter_wheat_planted.loc[i,'State ANSI'])+str(winter_wheat_planted.loc[i,'County ANSI'])))
+            elif len(str(int(float(winter_wheat_planted.loc[i,'County ANSI']))))>1:
+                winter_wheat_indices[i] = int(float(str(winter_wheat_planted.loc[i,'State ANSI'])+'0'+str(winter_wheat_planted.loc[i,'County ANSI'])))
+            else:
+                winter_wheat_indices[i] = int(float(str(winter_wheat_planted.loc[i,'State ANSI'])+'00'+str(winter_wheat_planted.loc[i,'County ANSI'])))
+
+        winter_wheat = pd.DataFrame(acres_planted, index=winter_wheat_indices,columns=['Winter_wheat'])
+
+        for winter_wheat_index,winter_wheat_row in winter_wheat.iterrows():
+            winter_wheat.loc[winter_wheat_index,'Winter_wheat'] = winter_wheat_row[0]/geometries.loc[winter_wheat_index]['ALAND']
+
+
+        #Combine relevant data into a single DataFrame
+        self.data= pd.concat([
+            election_results.loc[:,'per_gop_2016']-election_results.loc[:,'per_gop_2012'],
+            election_results.loc[:,'per_gop_2016'],
+            election_results.loc[:,'per_gop_2012'],
+
+            #Will become alabama special election results
+            alabama_special_election_results.loc[:,'per_gop_2017'],
+
+            #Will become voter turnout
+            youth_population.loc[:,'2012'],
+            youth_population.loc[:,'2015'],
+            election_results.loc[:, 'votes_dem_2016'],
+            election_results.loc[:, 'votes_gop_2016'],
+            election_results.loc[:, 'votes_dem_2012'],
+            election_results.loc[:, 'votes_gop_2012'],
+
+            population.loc[:,'2016'],
+            population.loc[:,'2012'],
+            population.loc[:,'2009'],
+            population.loc[:,'1980'],
+            #Will become population density
+            population.loc[:,'2016'],
+
+            white_population.loc[:,'2015'],
+            black_population.loc[:,'2015'],
+            hispanic_population.loc[:,'2015'],
+            asian_population.loc[:,'2015'],
+            indian_population.loc[:,'2015'],
+            youth_population.loc[:,'2015'],
+
+            white_population.loc[:,'2009'],
+            black_population.loc[:,'2009'],
+            hispanic_population.loc[:,'2009'],
+            asian_population.loc[:,'2009'],
+            indian_population.loc[:,'2009'],
+            youth_population.loc[:,'2009'],
+
+            unemployment_rate_1.loc[:,'2016 November'],
+            unemployment_rate_1.loc[:,'2011 November'],
+            unemployment_rate_1.loc[:,'2007 November'],
+
+            median_age.loc[:,'2015'],
+            bachelors_degrees.loc[:,'2012'],
+            commute_time.loc[:,'2015'],
+            food_stamps.loc[:,'2013'],
+            homeownership_rate.loc[:,'2015'],
+            income_inequality.loc[:,'2015'],
+
+            business_establishments.loc[:,'2016 Q3'],
+            business_establishments.loc[:,'2009 Q3'],
+
+            rent_burdened.loc[:,'2015'],
+            rent_burdened.loc[:,'2010'],
+
+            evangelicals['Evangelical'],
+            protestant['Protestant'],
+            blackprotestant['BlackProtestant'],
+            catholic['Catholic'],
+            jewish['Jewish'],
+            muslim['Muslim'],
+            mormon['Mormon'],
+
+            pd.DataFrame(climatechange[climatechange['GeoType']=='County']['human'].values,index=climatechange[climatechange['GeoType']=='County']['GEOID']),
+
+            corn['Corn'],
+            cotton['Cotton'],
+            soybeans['Soybeans'],
+            winter_wheat['Winter_wheat'],
+            median_income.loc[:,'2014']
+        ],axis=1)
+        self.data.columns=[
+            'GOPChange',
+            'GOP2016',
+            'GOP2012',
+
+            'AL_GOP2017',
+
+            'Turnout2012',
+            'Turnout2016',
+            'VotesDem2016',
+            'VotesGOP2016',
+            'VotesDem2012',
+            'VotesGOP2012',
+
+            'Population2016',
+            'Population2012',
+            'Population2009',
+            'Population1980',
+            'PopulationDensity2016',
+
+            'White2015',
+            'Black2015',
+            'Hispanic2015',
+            'Asian2015',
+            'Indian2015',
+            'Youth2015',
+            'White2009',
+            'Black2009',
+            'Hispanic2009',
+            'Asian2009',
+            'Indian2009',
+            'Youth2009',
+
+            'Unemployment2016',
+            'Unemployment2011',
+            'Unemployment2007',
+
+            'MedianAge',
+            'Bachelors',
+            'CommuteTime',
+            'FoodStamps',
+            'Homeownership',
+            'IncomeInequality',
+
+            'Businesses2016',
+            'Businesses2009',
+
+            'RentBurdened2015',
+            'RentBurdened2010',
+
+            'EvangelicalProtestant',
+            'MainlineProtestant',
+            'BlackProtestant',
+            'Catholic',
+            'Jewish',
+            'Muslim',
+            'Mormon',
+
+            'ClimateChange',
+
+            'Corn',
+            'Cotton',
+            'Soybeans',
+            'WinterWheat',
+            'MedianIncome'
+        ]
+
+
+        #Not all counties have crops grown in them
+        self.data['Corn'].fillna(0.0,inplace=True)
+        self.data['Cotton'].fillna(0.0,inplace=True)
+        self.data['Soybeans'].fillna(0.0,inplace=True)
+        self.data['WinterWheat'].fillna(0.0,inplace=True)
+        self.removeProblemCounties()
+
+        #First, normalize by converting everything to percents, etc. Don't have to worry about training vs test data here
+        #Turnout
+        self.data['Turnout2012'] = (self.data['VotesDem2012'].add(self.data['VotesGOP2012'])).div(self.data['Population2012']-(self.data['Turnout2012'].div(100.0)).mul(self.data['Population2012']))
+        self.data['Turnout2016'] = (self.data['VotesDem2016'].add(self.data['VotesGOP2016'])).div(self.data['Population2016']-(self.data['Turnout2016'].div(100.0)).mul(self.data['Population2016']))
+
+        self.data['White2015'] = self.data['White2015'].div(self.data['Population2016'])
+        self.data['Black2015'] = self.data['Black2015'].div(self.data['Population2016'])
+        self.data['Hispanic2015'] = self.data['Hispanic2015'].div(self.data['Population2016'])
+        self.data['Asian2015'] = self.data['Asian2015'].div(self.data['Population2016'])
+        self.data['Indian2015'] = self.data['Indian2015'].div(self.data['Population2016'])
+        self.data['Youth2015'] = self.data['Youth2015'].div(100.0)
+
+        self.data['White2009'] = self.data['White2009'].div(self.data['Population2009'])
+        self.data['Black2009'] = self.data['Black2009'].div(self.data['Population2009'])
+        self.data['Hispanic2009'] = self.data['Hispanic2009'].div(self.data['Population2009'])
+        self.data['Asian2009'] = self.data['Asian2009'].div(self.data['Population2009'])
+        self.data['Indian2009'] = self.data['Indian2009'].div(self.data['Population2009'])
+        self.data['Youth2009'] =self. data['Youth2009'].div(100.0)
+
+        self.data['Unemployment2016'] = self.data['Unemployment2016'].div(100.0)
+        self.data['Unemployment2007'] = self.data['Unemployment2007'].div(100.0)
+        self.data['Unemployment2011'] = self.data['Unemployment2011'].div(100.0)
+
+        self.data['IncomeInequality'] = self.data['IncomeInequality'].div(100.0)
+        self.data['MedianAge'] = self.data['MedianAge'].div(100.0)
+
+        self.data['RentBurdened2015'] = self.data['RentBurdened2015'].div(100.0)
+        self.data['RentBurdened2010'] = self.data['RentBurdened2010'].div(100.0)
+
+        self.data['Homeownership'] = self.data['Homeownership'].div(100.0)
+        self.data['FoodStamps'] = self.data['FoodStamps'].div(self.data['Population2016'])
+        self.data['Bachelors'] = self.data['Bachelors'].div(100.0)
+        self.data['CommuteTime'] = self.data['CommuteTime'].div(60.0)
+
+        self.data['Businesses2016'] = self.data['Businesses2016'].div(self.data['Population2016'])
+        self.data['Businesses2009'] = self.data['Businesses2009'].div(self.data['Population2009'])
+
+        self.data['ClimateChange'] = self.data['ClimateChange'].div(100.0)
+
+        #Get population density (people per square kilometer)
+        fileName = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
+        for county, record in zip(shpreader.Reader(fileName).geometries(), shpreader.Reader(fileName).records()):
+            fipsID = int(record.__dict__['attributes']['GEOID'])
+            if fipsID in self.data.index:
+                self.data['PopulationDensity2016'].loc[fipsID] = self.data['Population2016'].loc[fipsID]/(record.__dict__['attributes']['ALAND']/1000**2)
+
 
     def cleanData(self):
         """
@@ -208,12 +565,13 @@ class ElectionAnalysis():
             else:
                 self.trainingData = self.data
         if technique=='statewise':
-
             testIndices= np.where((self.data.index>int(self.stateCodes[i])*1000) & (self.data.index<(int(self.stateCodes[i])+1)*1000))
             #testIndices = np.where((self.data.index>int(stateCodes[i])*1000) & (self.data.index<(int(stateCodes[i])+1)*1000))[0])
             self.testData = self.data.loc[self.data.index[np.concatenate(testIndices)],:]
             self.trainingData = self.data.loc[self.data.index[np.where([self.data.index[k] not in self.data.index[np.concatenate(testIndices)] for k in range(len(self.data.index))])],:]
-
+        if technique =='individual':
+            self.testData = pd.DataFrame(self.data.iloc[i]).transpose()
+            self.trainingData = self.data.iloc[[i != k for k in range(len(self.data.index))]]
 
 
     def makePipeline(self, demographicsChanges=True, economicChanges=True):
@@ -237,12 +595,10 @@ class ElectionAnalysis():
         self.trainingFeatures = self.trainingData.drop(labelName, axis=1)
         #with pd.option_context('display.max_rows', None, 'display.max_columns', None):
         #    print(self.trainingFeatures.head())
-
         self.trainingFeatures = self.dataPipeline.fit_transform(self.trainingFeatures)
         self.trainingLabels = self.trainingData[labelName].copy()
         if labelName in self.testData.columns:
             self.testFeatures = self.testData.drop(labelName, axis=1)
-
             self.testLabels = self.testData[labelName].copy()
             self.testFeatures = self.dataPipeline.transform(self.testFeatures)
         else:
@@ -300,6 +656,8 @@ class ElectionAnalysis():
         ax.set_facecolor('#202020')
         plt.scatter(xValues, yValues, s=sValues,c=cMap(cValues))
         plt.axhline(0.0, linewidth=0.5, color='white',linestyle='--')
+        #plt.plot(np.linspace(minXValue, maxXValue, 100), np.linspace(minYValue, maxYValue, 100), linewidth=0.5, color='white',linestyle='--')
+
         fmtr = mtick.StrMethodFormatter('{x:,g}%')
         fmtr2 = mtick.StrMethodFormatter('{x:,g}%')
 
@@ -399,6 +757,57 @@ class ElectionAnalysis():
         plt.savefig('plots/'+str(pltTitle)+'.pdf',bbox_inches='tight')
         plt.show()
 
+    def statePlot(self, dataSeries, pltTitle, dataMin, dataMax, vMin, vMax, cLabel, cMap=cm.seismic):
+        """
+        Make a map of the counties in a particular state
+        The value to plot is contained in the dataSeries, and the index of the dataSeries is the FIPS id
+        """
+        fig = plt.figure(figsize=(10.0,7.0))
+        #Mainland
+        extent = self.stateExtent({int(v):k for k,v in self.stateCodes.items()}[int(str(dataSeries.index[0])[:-3])])
+        ax = plt.axes([0.0,0.0,1.0,1.0],projection=ccrs.LambertConformal(central_longitude=np.mean([extent[0], extent[1]]), central_latitude=np.mean([extent[2], extent[3]]), cutoff=-20), aspect=1.15, frameon=False)
+        ax.set_extent(extent)
+        edgeColor = 'black'
+        #Color in the census tracts
+        fileName = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
+        lineWidth = 0.0
+        for state, record in zip(shpreader.Reader(fileName).geometries(), shpreader.Reader(fileName).records()):
+            id = int(record.__dict__['attributes']['GEOID'])
+            #Shannon County was renamed to Oglala Dakota county, and its FIPS code was changed
+            if id == '46102':
+                id = '46113'
+
+            if id in dataSeries.index:
+                #Normalize the value so it matches the color mapping
+                faceColor = cMap((dataSeries.loc[id]-dataMin)/(dataMax-dataMin))
+                ax.add_geometries(state, crs=ccrs.Miller(), facecolor=faceColor, edgecolor=edgeColor, linewidth=lineWidth)
+
+        #Mark a black line around the state
+        fileName = 'cb_2015_us_state_5m/cb_2015_us_state_5m.shp'
+        for state, record in zip(shpreader.Reader(fileName).geometries(), shpreader.Reader(fileName).records()):
+            id = int(record.__dict__['attributes']['GEOID'])
+            if id == int(str(dataSeries.index[0])[:-3]):
+                ax.add_geometries(state, crs=ccrs.Miller(), facecolor='none', alpha=1.0, edgecolor='black', linewidth=1.0)
+
+        ax.background_patch.set_visible(False)
+        ax.outline_patch.set_visible(False)
+
+        #Add colorbar & format ticks
+        axc = plt.axes([0.25, 0.92, 0.5, 0.012], frameon=False)
+        norm = mpl.colors.Normalize(vmin=vMin, vmax=vMax)
+        numTicks = 9
+        cbarStep=float((vMax-vMin)/(numTicks-1.0))
+        cb = mpl.colorbar.ColorbarBase(axc, ticks=np.linspace(vMin, vMax, numTicks),cmap=cMap,norm=norm,orientation='horizontal')
+        cb.set_ticklabels(['{:.0f}%'.format(x) for x in np.arange(vMin, vMax+cbarStep, cbarStep)])
+        cb.ax.xaxis.set_ticks_position('top')
+        cb.set_label(cLabel, fontdict = {
+            'horizontalalignment' : 'center'
+            })
+        plt.savefig('plots/'+str(pltTitle)+'.pdf',bbox_inches='tight')
+
+        plt.show()
+
+
     def congressionalDistrictPlot(self, dataSeries, pltTitle, vMin, vMax, cLabel, cMap = cm.seismic):
         """
         Make a map of the Census tracts in a particular Congressional District
@@ -450,8 +859,93 @@ class ElectionAnalysis():
 
         plt.show()
 
+    def stateExtent(self, name):
+        """
+        For plotting a single state at a time... I haven't gone through every state yet
+        Returns latitude, longitude to be around state of interest
+        """
+        if name =='AL':
+            return [-89.0, -84.5, 29.0, 34.5]
+        elif name == 'AZ':
+            return [-115.7, -108.5, 30.0, 35.7]
+        elif name == 'AR':
+            return [-95.43, -89.37, 32.78, 35.2]
+        elif name == 'CA':
+            return [-125.3, -113.7, 30.5, 41.5]
+        elif name == 'CO':
+            return [-110.0, -101.3, 36.14, 41.36]
+        elif name == 'CT':
+            return [-74.12, -71.47, 38.8, 39.9]
+        elif name == 'DE':
+            return [-76.0, -75.0, 36.6, 38.0]
+        elif name == 'FL':
+            return [-88.0,-79., 23., 31.]
+        elif name == 'GA':
+            return [-86.1, -80.44, 30.06, 34.0]
+        elif name == 'HI':
+            return [-162.0, -152., 18.,23.]
+        elif name == 'ID':
+            return [-118.0, -110.5, 39.2, 45.7]
+        elif name == 'IL':
+            return [-92.24, -86.91, 36.74, 40.4]
+        elif name == 'IN':
+            return [-88.43, -84.53, 35.9, 41.95]
+        elif name == 'IA':
+            return [-96.98, -89.8, 40.14, 43.87]
+        elif name == 'KS':
+            return [-102.8, -94.2, 35.04, 38.3]
+        elif name == 'NC':
+            return [-85.0,-74., 32.,36.]
+        elif name == 'PA':
+            return [-81.0, -74., 37., 40.]
+        else:
+            return [-150, -70, 20, 45]
+        """
+        elif name == 'RI':
+        elif name == 'SC':
+        elif name == 'SD':
+        elif name == 'TN':
+        elif name == 'TX':
+        elif name == 'UT':
+        elif name == 'VT':
+        elif name == 'VA':
+        elif name == 'WA':
+        elif name == 'WV':
+        elif name == 'WI':
+        elif name == 'WY':
+        elif name == 'ND':
+        elif name == 'OH':
+        elif name == 'OK':
+        elif name == 'OR':
+        elif name == 'KY':
+        elif name == 'LA':
+        elif name == 'ME':
+        elif name == 'MD':
+        elif name == 'MA':
+        elif name == 'MI':
+        elif name == 'MN':
+        elif name == 'MS':
+        elif name == 'MO':
+        elif name == 'MT':
+        elif name == 'NE':
+        elif name == 'NV':
+        elif name == 'NH':
+        elif name == 'NJ':
+        elif name == 'NM':
+        elif name == 'NY':
+        """
+
+
 
 def main():
+
+    model = ElectionAnalysis(regressionType='Linear', numDivisions=50, attributes=attribs)
+    model.loadData()
+    model.cleanData()
+    caLocations = np.where((model.data.index<7000) & (model.data.index>6000))
+    #Plot California results
+    model.statePlot(pd.Series(index=model.data.index[caLocations], data=model.data['GOP2016'][caLocations]),dataMin=0.0, dataMax=1.0, vMin=0.0, vMax=100.0, cLabel = 'GOP Vote Share', pltTitle='2017-07-28-Election-Neural-Net/National_vote_fraction2')
+
     pass
 if __name__ == '__main__':
     main()

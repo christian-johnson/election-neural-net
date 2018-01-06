@@ -53,15 +53,32 @@ model.cleanData()
 model.makePipeline(demographicsChanges=False, economicChanges=False)
 
 #Figure 2- Florida vote & prediction
-#model.splitTestTrain(technique='statewise', i=)
+#model.splitTestTrain(technique='statewise', i='FL')
 #model.prepData(labelName = 'GOP2016')
 #model.trainModel()
 #model.predictModel()
 
-#model.statePlot()
-#model.statePlot()
+#model.statePlot(pd.Series(index=model.testData.index, data=model.predictions),dataMin=0.0, dataMax=1.0, vMin=0.0, vMax=100.0, cLabel = 'GOP Vote Share', pltTitle='2017-07-28-Election-Neural-Net/caPrediction2')
+#model.statePlot(pd.Series(index=model.testData.index, data=model.testData['GOP2016'].values),dataMin=0.0, dataMax=1.0, vMin=0.0, vMax=100.0, cLabel = 'GOP Vote Share', pltTitle='2017-07-28-Election-Neural-Net/caActual2')
 
 #Figure 3- National vote residuals
+#for i in list(model.stateCodes.keys()):
+#    model.splitTestTrain(technique='statewise', i=i)
+#    model.prepData(labelName = 'GOP2016')
+#    model.trainModel()
+#    model.predictModel()
+#    model.residModel()
+#    model.concatenateResiduals()
+
+#model.countyPlot(pd.Series(index=model.data.index, data=model.results.values),dataMin=-0.2, dataMax=0.2, vMin=-20.0, vMax=20.0, cLabel = 'GOP Vote Share Residual', pltTitle='2017-07-28-Election-Neural-Net/vote_residmap2')
+#Figure 4- Bubbble plot of residuals versus vote share
+#model.bubblePlot(100.0*model.data['GOP2016'].values, 100.0*model.results.values, sValues=model.data['Population2016'].values/4250., cValues=10.*model.results.values+0.5, fileName='2017-07-28-Election-Neural-Net/residual_vs_vote3', xLabel='GOP Vote Fraction', yLabel='GOP Vote Residual', minXValue=0.0, minYValue=-20.0, maxXValue=100.0, maxYValue=20.0, cMap = cm.coolwarm)
+
+
+#Figure 5- Injected votes residuals
+model.editData(12086, 'GOP2016', (model.data.loc[12086]['Turnout2016']*(model.data.loc[12086]['Population2016']-model.data.loc[12086]['Youth2015']*model.data.loc[12086]['Population2016'])*
+    model.data.loc[12086]['GOP2016']+10000.0)/(model.data.loc[12086]['Turnout2016']*(model.data.loc[12086]['Population2016']-model.data.loc[12086]['Youth2015']*model.data.loc[12086]['Population2016'])))
+
 for i in list(model.stateCodes.keys()):
     model.splitTestTrain(technique='statewise', i=i)
     model.prepData(labelName = 'GOP2016')
@@ -70,13 +87,12 @@ for i in list(model.stateCodes.keys()):
     model.residModel()
     model.concatenateResiduals()
 
-model.countyPlot(pd.Series(index=model.data.index, data=model.results.values),dataMin=-0.2, dataMax=0.2, vMin=-20.0, vMax=20.0, cLabel = 'GOP Vote Share Residual', pltTitle='2017-07-28-Election-Neural-Net/vote_residmap2')
-#Figure 4- Bubbble plot of residuals versus vote share
-model.bubblePlot(100.0*model.data['GOP2016'].values, 100.0*model.results.values, sValues=model.data['Population2016'].values/4250., cValues=10.*model.results.values+0.5, fileName='2017-07-28-Election-Neural-Net/residual_vs_vote3', xLabel='GOP Vote Fraction', yLabel='GOP Vote Residual', minXValue=0.0, minYValue=-20.0, maxXValue=100.0, maxYValue=20.0, cMap = cm.coolwarm)
-
-#Figure 5- Injected votes residuals
+model.countyPlot(pd.Series(index=model.data.index, data=model.results.values),dataMin=-0.2, dataMax=0.2, vMin=-20.0, vMax=20.0,
+    cLabel = 'GOP Vote Share Residual- Injected Votes', pltTitle='2017-07-28-Election-Neural-Net/injected_votes2')
 
 #Figure 6- Vote change 2012-2016
+model.countyPlot(pd.Series(index=model.data.index, data=model.data['GOP2016'].values-model.data['GOP2012'].values+0.5),dataMin=0.0, dataMax=1.0, vMin=0.0, vMax=100.0,
+    cLabel = 'GOP Vote Change 2012-2016', pltTitle='2017-07-28-Election-Neural-Net/vote_change2')
 
 #Figure 7- Turnout
 

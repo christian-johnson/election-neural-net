@@ -348,19 +348,6 @@ def load_data():
 
     return data
 
-def remove_problem_counties(data):
-    if 46103 in data.index:
-        data = data.drop(46103)
-    if 46105 in data.index:
-        data = data.drop(46105)
-    if 46109 in data.index:
-        data = data.drop(46109)
-    if 46111 in data.index:
-        data = data.drop(46111)
-    if 46102 in data.index:
-        data = data.drop(46102)
-    return data
-
 def clean_data(data):
     #Remove problem counties in South Dakota
 
