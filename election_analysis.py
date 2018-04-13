@@ -88,7 +88,7 @@ class CombinedAttributesAdder(BaseEstimator, TransformerMixin):
             X = np.c_[X, unemployment_2007_change, unemployment_2011_change, businesses_change, population_change, rent_burdened_change]
 
         #Delete old data- don't want it cluttering the algorithm
-        X = np.delete(X, [self.white2009_index, self.black_2009_index, self.hispanic_2009_index, self.asian_2009_index, self.indian_2009_index, self.youth_2009_index, self.unemployment_2007_index, self.unemployment_2011_index, self.businesses_2009_index, self.population_2009_index, self.rent_burdened_2010_index], axis=1)
+        #X = np.delete(X, [self.white2009_index, self.black_2009_index, self.hispanic_2009_index, self.asian_2009_index, self.indian_2009_index, self.youth_2009_index, self.unemployment_2007_index, self.unemployment_2011_index, self.businesses_2009_index, self.population_2009_index, self.rent_burdened_2010_index], axis=1)
         return X
 
 #Class to translate Pandas DataFrames into Numpy Arrays
@@ -105,58 +105,13 @@ states = ['AL','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
 #corr_matrix = data.corr()
 #print corr_matrix['GOP2016'].sort_values(ascending=False)
 
-#Features which we will train on. Modified later in the pipeline by CombinedAttributesAdder
-
-attribs = [
-        'GOP2012',
-        'Turnout2012',
-        'Turnout2016',
-        'Population2016',
-        'Population2012',
-        'Population2009',
-        'PopulationDensity2016',
-        'White2015',
-        'Black2015',
-        'Hispanic2015',
-        'Asian2015',
-        'Indian2015',
-        'Youth2015',
-        'White2009',
-        'Black2009',
-        'Hispanic2009',
-        'Asian2009',
-        'Indian2009',
-        'Youth2009',
-        'Unemployment2016',
-        'Unemployment2011',
-        'Unemployment2007',
-        'MedianAge',
-        'Bachelors',
-        'CommuteTime',
-        'FoodStamps',
-        'Homeownership',
-        'IncomeInequality',
-        'Businesses2016',
-        'Businesses2009',
-        'RentBurdened2015',
-        'RentBurdened2010',
-        'EvangelicalProtestant',
-        'MainlineProtestant',
-        'BlackProtestant',
-        'Catholic',
-        'Jewish',
-        'Muslim',
-        'Mormon',
-        'MedianIncome'
-    ]
-
 class ElectionAnalysis():
     """
     A general class for analyzing election data with machine learning.
     Includes methods for training ML models and predicting/finding residuals
     Also includes various scrips for making pretty plots
     """
-    def __init__(self, regressionType = 'Linear', numDivisions = 50, attributes = attribs):
+    def __init__(self, attribs, regressionType = 'Linear', numDivisions = 50, reloadData = False):
         self.regressionType = regressionType
         self.numDivisions = numDivisions
         self.attributes = attribs
@@ -171,6 +126,12 @@ class ElectionAnalysis():
         elif regressionType == 'RandomForest':
             self.regressor = RandomForestRegressor(max_features=30, n_estimators=200)
 
+        if reloadData:
+            self.loadData()
+        else:
+            file = open('database.pk1','rb')
+            self.data = pickle.load(file)
+            file.close()
 
     def removeProblemCounties(self):
         if 46103 in self.data.index:
@@ -190,7 +151,7 @@ class ElectionAnalysis():
         """
 
         #Election data
-        election_results = pd.read_excel('data_spreadsheets/US_County_Level_Presidential_Results_08-16.xls', 'Sheet 1', index_col=0, header=1, usecols=list(range(1,100)), skiprows=range(2,31))
+        election_results = pd.read_excel('data_spreadsheets/US_County_Level_Presidential_Results_08-16.xlsx', 'Sheet 1', index_col=0, header=1, usecols=list(range(1,100)), skiprows=range(2,31))
 
         alabama_special_election_results = pd.read_excel('data_spreadsheets/alabama_special_election2017.xlsx', 'Sheet 1', index_col=0, header=1, usecols=list(range(1,100)))
         #Data from St. Louis GeoFRED
@@ -235,8 +196,17 @@ class ElectionAnalysis():
 
         climatechange = pd.read_csv('data_spreadsheets/yale_climate_change.csv')
 
-        #Agricultural data:
+        #Drug poisonings per 100,000 people per year
+        drugpoisoning = pd.read_csv('data_spreadsheets/drug_poisoning.csv').pivot(index='FIPS',columns='Year',values='Estimated Age-adjusted Death Rate, 16 Categories (in ranges)')
+        for column in drugpoisoning.columns:
+            drugpoisoning[column] = drugpoisoning[column].str.split('-')
+        drugpoisoning = drugpoisoning.dropna()
+        for fips in drugpoisoning.index:
+            for column in drugpoisoning.columns:
+                drugpoisoning[column][fips] = float(drugpoisoning[column][fips][0].replace('>',''))
 
+
+        #Agricultural data
         #Get county areas, in m^2
         filename = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
         geometries = pd.DataFrame([y[0].__dict__['attributes'] for y in zip(shpreader.Reader(filename).records())])
@@ -344,8 +314,8 @@ class ElectionAnalysis():
             election_results.loc[:,'per_gop_2016'],
             election_results.loc[:,'per_gop_2012'],
 
-            #Will become alabama special election results
-            alabama_special_election_results.loc[:,'per_gop_2017'],
+            #Alabama special election results, if desired
+            #alabama_special_election_results.loc[:,'per_gop_2017'],
 
             #Will become voter turnout
             youth_population.loc[:,'2012'],
@@ -375,6 +345,7 @@ class ElectionAnalysis():
             asian_population.loc[:,'2009'],
             indian_population.loc[:,'2009'],
             youth_population.loc[:,'2009'],
+            youth_population.loc[:,'2012'],
 
             unemployment_rate_1.loc[:,'2016 November'],
             unemployment_rate_1.loc[:,'2011 November'],
@@ -407,14 +378,16 @@ class ElectionAnalysis():
             cotton['Cotton'],
             soybeans['Soybeans'],
             winter_wheat['Winter_wheat'],
-            median_income.loc[:,'2014']
+            median_income.loc[:,'2014'],
+
+            drugpoisoning[2015]
         ],axis=1)
         self.data.columns=[
             'GOPChange',
             'GOP2016',
             'GOP2012',
 
-            'AL_GOP2017',
+            #'AL_GOP2017',
 
             'Turnout2012',
             'Turnout2016',
@@ -441,6 +414,7 @@ class ElectionAnalysis():
             'Asian2009',
             'Indian2009',
             'Youth2009',
+            'Youth2012',
 
             'Unemployment2016',
             'Unemployment2011',
@@ -473,9 +447,10 @@ class ElectionAnalysis():
             'Cotton',
             'Soybeans',
             'WinterWheat',
-            'MedianIncome'
-        ]
+            'MedianIncome',
 
+            'DrugPoisoning'
+        ]
 
         #Not all counties have crops grown in them
         self.data['Corn'].fillna(0.0,inplace=True)
@@ -486,8 +461,8 @@ class ElectionAnalysis():
 
         #First, normalize by converting everything to percents, etc. Don't have to worry about training vs test data here
         #Turnout
-        self.data['Turnout2012'] = (self.data['VotesDem2012'].add(self.data['VotesGOP2012'])).div(self.data['Population2012']-(self.data['Turnout2012'].div(100.0)).mul(self.data['Population2012']))
-        self.data['Turnout2016'] = (self.data['VotesDem2016'].add(self.data['VotesGOP2016'])).div(self.data['Population2016']-(self.data['Turnout2016'].div(100.0)).mul(self.data['Population2016']))
+        self.data['Turnout2012'] = (self.data['VotesDem2012'].add(self.data['VotesGOP2012'])).div(self.data['Population2012'])#-(self.data['Turnout2012'].div(100.0)).mul(self.data['Population2012']))
+        self.data['Turnout2016'] = (self.data['VotesDem2016'].add(self.data['VotesGOP2016'])).div(self.data['Population2016'])#-(self.data['Turnout2016'].div(100.0)).mul(self.data['Population2016']))
 
         self.data['White2015'] = self.data['White2015'].div(self.data['Population2016'])
         self.data['Black2015'] = self.data['Black2015'].div(self.data['Population2016'])
@@ -529,13 +504,11 @@ class ElectionAnalysis():
             fipsID = int(record.__dict__['attributes']['GEOID'])
             if fipsID in self.data.index:
                 self.data['PopulationDensity2016'].loc[fipsID] = self.data['Population2016'].loc[fipsID]/(record.__dict__['attributes']['ALAND']/1000**2)
+        self.data = self.data.dropna()
 
-
-    def cleanData(self):
-        """
-        Remove a handful of problem counties in South Dakota from the dataset
-        """
-        self.data = ld.clean_data(self.data)
+        file = open('database.pk1', 'wb')
+        pickle.dump(self.data, file)
+        file.close()
 
     def editData(self, fipsId, attribute, newValue):
         """
@@ -564,6 +537,7 @@ class ElectionAnalysis():
                 self.testData = self.data.loc[testSet]
             else:
                 self.trainingData = self.data
+
         if technique=='statewise':
             testIndices= np.where((self.data.index>int(self.stateCodes[i])*1000) & (self.data.index<(int(self.stateCodes[i])+1)*1000))
             #testIndices = np.where((self.data.index>int(stateCodes[i])*1000) & (self.data.index<(int(stateCodes[i])+1)*1000))[0])
@@ -584,7 +558,8 @@ class ElectionAnalysis():
         self.dataPipeline = Pipeline([
             ('selector', DataFrameSelector(self.attributes)),
             ('attribs', CombinedAttributesAdder(demographicsChanges=demographicsChanges, economicChanges=economicChanges)),
-            ('std_scaler', MinMaxScaler()),])#StandardScaler()),])
+            ])#StandardScaler()),])
+        self.dataScaler = Pipeline([('std_scaler', MinMaxScaler()),])
 
     def prepData(self, labelName):
         """
@@ -593,18 +568,31 @@ class ElectionAnalysis():
         After this is run, the data should be ready for training
         """
         self.trainingFeatures = self.trainingData.drop(labelName, axis=1)
+        self.trainingLabels = self.trainingData[labelName].copy().values
         #with pd.option_context('display.max_rows', None, 'display.max_columns', None):
         #    print(self.trainingFeatures.head())
         self.trainingFeatures = self.dataPipeline.fit_transform(self.trainingFeatures)
-        self.trainingLabels = self.trainingData[labelName].copy()
+        populationIndex = self.attributes.index('Population2016')
+
+        #Repeat each county in the training set by the log10 of its population.
+        for i in range(len(self.trainingFeatures)):
+            numRepeats = int(np.log10(self.trainingFeatures[i,populationIndex]))
+            repeatedFeatures = np.repeat(self.trainingFeatures[i,:],numRepeats).reshape(len(self.trainingFeatures[i,:]),numRepeats).transpose()
+            repeatedLabels = np.repeat(self.trainingLabels[i],numRepeats).reshape(numRepeats,)
+            self.trainingFeatures = np.concatenate([self.trainingFeatures, repeatedFeatures])
+            self.trainingLabels = np.concatenate([self.trainingLabels, repeatedLabels])
+
+        self.trainingFeatures = self.dataScaler.fit_transform(self.trainingFeatures)
+
         if labelName in self.testData.columns:
             self.testFeatures = self.testData.drop(labelName, axis=1)
             self.testLabels = self.testData[labelName].copy()
             self.testFeatures = self.dataPipeline.transform(self.testFeatures)
+            self.testFeatures = self.dataScaler.transform(self.testFeatures)
+
         else:
             self.testFeatures = self.dataPipeline.transform(self.testData)
-            #with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-            #    print(self.testData.head())
+            self.testFeatures = self.dataScaler.transform(self.testData)
 
 
 
@@ -670,7 +658,7 @@ class ElectionAnalysis():
         plt.savefig('plots/'+fileName+'.pdf',bbox_inches='tight')
         plt.show()
 
-    def countyPlot(self, dataSeries, dataMin, dataMax, vMin, vMax, pltTitle, cLabel, cMap = cm.seismic, AK_value = False):
+    def countyPlot(self, dataSeries, dataMin, dataMax, vMin, vMax, pltTitle, cLabel, cMap = cm.seismic, AK_value = False, pltSupTitle = False):
         """
         Plots a map of the US, with each county colored by a data series
         dataSeries: a single-column Pandas DataFrame with the indices given by integer FIPS codes
@@ -749,13 +737,16 @@ class ElectionAnalysis():
         numTicks = 9
         cbarStep=float((vMax-vMin)/(numTicks-1.0))
         cb = mpl.colorbar.ColorbarBase(axc, ticks=np.linspace(vMin, vMax, numTicks),cmap=cMap,norm=norm,orientation='horizontal')
-        cb.set_ticklabels(['{:.0f}%'.format(x) for x in np.arange(vMin, vMax+cbarStep, cbarStep)])
+        cb.set_ticklabels(['{:.0f}'.format(x) for x in np.arange(vMin, vMax+cbarStep, cbarStep)])
         cb.ax.xaxis.set_ticks_position('top')
         cb.set_label(cLabel, fontdict = {
             'horizontalalignment' : 'center'
             })
+
+        if pltSupTitle:
+            plt.suptitle(pltSupTitle,x=0.9,y=0.35)
         plt.savefig('plots/'+str(pltTitle)+'.pdf',bbox_inches='tight')
-        plt.show()
+        #plt.show()
 
     def statePlot(self, dataSeries, pltTitle, dataMin, dataMax, vMin, vMax, cLabel, cMap=cm.seismic):
         """
@@ -941,7 +932,9 @@ def main():
 
     model = ElectionAnalysis(regressionType='Linear', numDivisions=50, attributes=attribs)
     model.loadData()
-    model.cleanData()
+    model.countyPlot(dataSeries = model.data['DrugPoisoning'], dataMin = 0.0, dataMax = 30.0, vMin = 0.0, vMax = 30.0, pltTitle = 'DrugPoisoning2015', cLabel = 'Drug Poisoning Rate per 100,000 People', cMap = cm.magma, AK_value = False)
+    input('wait for key')
+
     caLocations = np.where((model.data.index<7000) & (model.data.index>6000))
     #Plot California results
     model.statePlot(pd.Series(index=model.data.index[caLocations], data=model.data['GOP2016'][caLocations]),dataMin=0.0, dataMax=1.0, vMin=0.0, vMax=100.0, cLabel = 'GOP Vote Share', pltTitle='2017-07-28-Election-Neural-Net/National_vote_fraction2')
