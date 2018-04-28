@@ -151,9 +151,10 @@ class ElectionAnalysis():
         """
 
         #Election data
-        election_results = pd.read_excel('data_spreadsheets/US_County_Level_Presidential_Results_08-16.xlsx', 'Sheet 1', index_col=0, header=1, usecols=list(range(1,100)), skiprows=range(2,31))
-
+        election_results = pd.read_excel('data_spreadsheets/US_County_Level_Presidential_Results_08-16.xlsx', 'Sheet 1', header=1, usecols=list(range(0,100)), skiprows=range(2,31))
+        election_results.index = election_results['combined_fips']
         alabama_special_election_results = pd.read_excel('data_spreadsheets/alabama_special_election2017.xlsx', 'Sheet 1', index_col=0, header=1, usecols=list(range(1,100)))
+
         #Data from St. Louis GeoFRED
         food_stamps = pd.read_excel('data_spreadsheets/food_stamps_1989_2013.xls','Sheet0', index_col=0, header=0, usecols=[2,3,7,9]+list(range(11,28)))
         population = pd.read_excel('data_spreadsheets/population_1970_2016.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,50)))
@@ -379,9 +380,10 @@ class ElectionAnalysis():
             soybeans['Soybeans'],
             winter_wheat['Winter_wheat'],
             median_income.loc[:,'2014'],
-
             drugpoisoning[2015]
         ],axis=1)
+
+
         self.data.columns=[
             'GOPChange',
             'GOP2016',
@@ -448,7 +450,6 @@ class ElectionAnalysis():
             'Soybeans',
             'WinterWheat',
             'MedianIncome',
-
             'DrugPoisoning'
         ]
 
@@ -458,7 +459,6 @@ class ElectionAnalysis():
         self.data['Soybeans'].fillna(0.0,inplace=True)
         self.data['WinterWheat'].fillna(0.0,inplace=True)
         self.removeProblemCounties()
-
         #First, normalize by converting everything to percents, etc. Don't have to worry about training vs test data here
         #Turnout
         self.data['Turnout2012'] = (self.data['VotesDem2012'].add(self.data['VotesGOP2012'])).div(self.data['Population2012'])#-(self.data['Turnout2012'].div(100.0)).mul(self.data['Population2012']))
@@ -523,7 +523,8 @@ class ElectionAnalysis():
         """
         Split data by an index i
         If technique == 'hash' (default & recommended for a national analysis), compute the hash of the FIPS code and check whether it is between i/numDivisions and (i+1)/numDivisions
-        If technique == 'statewise' (if you want to focus just on one state), consider the ith state (alphabetically) as the test data
+        If technique == 'statewise' (if you want to split training & test by state), the state(s) abbreviation as the test data. Here i is a list of abbreviations
+        If technique == 'individual' (split each county separately as its own test set)
         """
         if technique=='hash':
             if self.numDivisions>1:
@@ -539,10 +540,16 @@ class ElectionAnalysis():
                 self.trainingData = self.data
 
         if technique=='statewise':
-            testIndices= np.where((self.data.index>int(self.stateCodes[i])*1000) & (self.data.index<(int(self.stateCodes[i])+1)*1000))
-            #testIndices = np.where((self.data.index>int(stateCodes[i])*1000) & (self.data.index<(int(stateCodes[i])+1)*1000))[0])
-            self.testData = self.data.loc[self.data.index[np.concatenate(testIndices)],:]
-            self.trainingData = self.data.loc[self.data.index[np.where([self.data.index[k] not in self.data.index[np.concatenate(testIndices)] for k in range(len(self.data.index))])],:]
+            testIndices = np.array([],'i')
+            for state in i:
+                testIndices= np.concatenate([testIndices,np.where((self.data.index>int(self.stateCodes[state])*1000) & (self.data.index<(int(self.stateCodes[state])+1)*1000))[0]])
+            self.testData = self.data.iloc[testIndices]
+
+            trainingIndices = range(len(self.data))
+            for k in testIndices:
+                trainingIndices.remove(k)
+            self.trainingData = self.data.iloc[trainingIndices]
+
         if technique =='individual':
             self.testData = pd.DataFrame(self.data.iloc[i]).transpose()
             self.trainingData = self.data.iloc[[i != k for k in range(len(self.data.index))]]
@@ -581,6 +588,7 @@ class ElectionAnalysis():
             repeatedLabels = np.repeat(self.trainingLabels[i],numRepeats).reshape(numRepeats,)
             self.trainingFeatures = np.concatenate([self.trainingFeatures, repeatedFeatures])
             self.trainingLabels = np.concatenate([self.trainingLabels, repeatedLabels])
+        print(len(self.trainingLabels))
 
         self.trainingFeatures = self.dataScaler.fit_transform(self.trainingFeatures)
 
@@ -593,7 +601,6 @@ class ElectionAnalysis():
         else:
             self.testFeatures = self.dataPipeline.transform(self.testData)
             self.testFeatures = self.dataScaler.transform(self.testData)
-
 
 
     def trainModel(self):
@@ -625,10 +632,10 @@ class ElectionAnalysis():
         """
         Get the RMS of the residuals
         """
-        self.rms = np.sqrt(np.mean(self.results.values**2))
+        self.rms = np.sqrt(np.mean(self.residuals.values**2))
         return self.rms
 
-    def bubblePlot(self, xValues, yValues, sValues, cValues, fileName, xLabel, yLabel, minXValue, minYValue, maxXValue, maxYValue, cMap = cm.seismic):
+    def bubblePlot(self, xValues, yValues, sValues, cValues, fileName, xLabel, yLabel, minXValue, minYValue, maxXValue, maxYValue, cMap = cm.seismic, scale = 'linear'):
         """
         Create a nice-looking bubble plot where each bubble is a single county
         xValues: x positions of the bubbles (np array)
@@ -646,17 +653,19 @@ class ElectionAnalysis():
         plt.axhline(0.0, linewidth=0.5, color='white',linestyle='--')
         #plt.plot(np.linspace(minXValue, maxXValue, 100), np.linspace(minYValue, maxYValue, 100), linewidth=0.5, color='white',linestyle='--')
 
+        plt.ylim([minYValue, maxYValue])
+        plt.xlim([minXValue, maxXValue])
+        plt.ylabel(yLabel)
+        plt.xlabel(xLabel)
+        plt.xscale(scale)
         fmtr = mtick.StrMethodFormatter('{x:,g}%')
         fmtr2 = mtick.StrMethodFormatter('{x:,g}%')
 
         ax.xaxis.set_major_formatter(fmtr2)
         ax.yaxis.set_major_formatter(fmtr)
-        plt.ylim([minYValue, maxYValue])
-        plt.xlim([minXValue, maxXValue])
-        plt.ylabel(yLabel)
-        plt.xlabel(xLabel)
+
         plt.savefig('plots/'+fileName+'.pdf',bbox_inches='tight')
-        plt.show()
+        #plt.show()
 
     def countyPlot(self, dataSeries, dataMin, dataMax, vMin, vMax, pltTitle, cLabel, cMap = cm.seismic, AK_value = False, pltSupTitle = False):
         """
@@ -737,7 +746,65 @@ class ElectionAnalysis():
         numTicks = 9
         cbarStep=float((vMax-vMin)/(numTicks-1.0))
         cb = mpl.colorbar.ColorbarBase(axc, ticks=np.linspace(vMin, vMax, numTicks),cmap=cMap,norm=norm,orientation='horizontal')
-        cb.set_ticklabels(['{:.0f}'.format(x) for x in np.arange(vMin, vMax+cbarStep, cbarStep)])
+        cb.set_ticklabels(['{:.0f}%'.format(x) for x in np.arange(vMin, vMax+cbarStep, cbarStep)])
+        cb.ax.xaxis.set_ticks_position('top')
+        cb.set_label(cLabel, fontdict = {
+            'horizontalalignment' : 'center'
+            })
+
+        if pltSupTitle:
+            plt.suptitle(pltSupTitle,x=0.9,y=0.35)
+        plt.savefig('plots/'+str(pltTitle)+'.pdf',bbox_inches='tight')
+        #plt.show()
+
+    def subCountyPlot(self, dataSeries, dataMin, dataMax, vMin, vMax, pltTitle, cLabel, cMap = cm.seismic, AK_value = False, pltSupTitle = False):
+        """
+        Plots a map of the US, with each county colored by a data series
+        dataSeries: a single-column Pandas DataFrame with the indices given by integer FIPS codes
+        vMin, vMax: minimum and maximum of the colorbar- should correspond to the minima and maxima of the data
+        cLabel: Label of the colorbar
+        """
+        fig = plt.figure(figsize=(10.0,7.0))
+        #Mainland
+        ax = plt.axes([0.0,0.0,1.0,0.85],projection=ccrs.LambertConformal(central_longitude=-96.0, central_latitude=39.0, cutoff=-20), aspect=1.15, frameon=False)
+        ax.set_extent([-95.0,-77., 29.,43.])
+        fileName = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
+        lineWidth = 0.0
+        edgeColor = 'black'
+
+        for state, record in zip(shpreader.Reader(fileName).geometries(), shpreader.Reader(fileName).records()):
+            id = int(record.__dict__['attributes']['GEOID'])
+            #Shannon County was renamed to Oglala Dakota county, and its FIPS code was changed
+            if id == '46102':
+                id = '46113'
+
+            if id in dataSeries.index:
+                #Normalize the value so it matches the color mapping
+                faceColor = cMap((dataSeries.loc[id]-dataMin)/(dataMax-dataMin))
+                ax.add_geometries(state, crs=ccrs.Miller(), facecolor=faceColor, edgecolor=edgeColor, linewidth=lineWidth)
+            else:
+                #Missing data goes in gray
+                faceColor = 'gray'
+                #Is the county in Hawaii, Alaska, or the mainland?
+                ax.add_geometries(state, crs=ccrs.Miller(), facecolor=faceColor, edgecolor=edgeColor, linewidth=lineWidth)
+
+        #Mark a black line around each state
+        fileName = 'cb_2015_us_state_5m/cb_2015_us_state_5m.shp'
+        lineWidth = 0.25
+        for state, record in zip(shpreader.Reader(fileName).geometries(), shpreader.Reader(fileName).records()):
+            id = int(record.__dict__['attributes']['GEOID'])
+            facecolor = cMap(0.0)
+            ax.add_geometries(state, crs=ccrs.Miller(), facecolor='none', alpha=1.0, edgecolor=edgeColor, linewidth=lineWidth)
+
+        ax.background_patch.set_visible(False)
+        ax.outline_patch.set_visible(False)
+        #Add colorbar & format ticks
+        axc = plt.axes([0.25, 0.92, 0.5, 0.012], frameon=False)
+        norm = mpl.colors.Normalize(vmin=vMin, vmax=vMax)
+        numTicks = 9
+        cbarStep=float((vMax-vMin)/(numTicks-1.0))
+        cb = mpl.colorbar.ColorbarBase(axc, ticks=np.linspace(vMin, vMax, numTicks),cmap=cMap,norm=norm,orientation='horizontal')
+        cb.set_ticklabels(['{:.0f}%'.format(x) for x in np.arange(vMin, vMax+cbarStep, cbarStep)])
         cb.ax.xaxis.set_ticks_position('top')
         cb.set_label(cLabel, fontdict = {
             'horizontalalignment' : 'center'
