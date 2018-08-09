@@ -176,7 +176,7 @@ class ElectionAnalysis():
         homeownership_rate = pd.read_excel('data_spreadsheets/homeownership_rate_2009_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
         income_inequality = pd.read_excel('data_spreadsheets/income_inequality_2010_2015.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,100)))
         business_establishments = pd.read_excel('data_spreadsheets/business_establishments_1990_2016.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,200)))
-        median_income = pd.read_excel('data_spreadsheets/median_income_1989_2014.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,200)))
+        median_income = pd.read_excel('data_spreadsheets/median_income_1989_2016.xls','Sheet0', index_col=0, header=1, skiprows=0, usecols=list(range(2,200)))
         #Religion data from CSV files
         religion = pd.read_stata('data_spreadsheets/religion.dta')
         religion = religion.fillna(0.0)
@@ -379,10 +379,10 @@ class ElectionAnalysis():
             cotton['Cotton'],
             soybeans['Soybeans'],
             winter_wheat['Winter_wheat'],
-            median_income.loc[:,'2014'],
+            median_income.loc[:,'2016'],
             drugpoisoning[2015]
         ],axis=1)
-
+        print(self.data.shape)
 
         self.data.columns=[
             'GOPChange',
@@ -497,15 +497,15 @@ class ElectionAnalysis():
         self.data['Businesses2009'] = self.data['Businesses2009'].div(self.data['Population2009'])
 
         self.data['ClimateChange'] = self.data['ClimateChange'].div(100.0)
-
+        print(self.data.shape)
         #Get population density (people per square kilometer)
         fileName = 'cb_2015_us_county_5m/cb_2015_us_county_5m.shp'
         for county, record in zip(shpreader.Reader(fileName).geometries(), shpreader.Reader(fileName).records()):
             fipsID = int(record.__dict__['attributes']['GEOID'])
             if fipsID in self.data.index:
                 self.data['PopulationDensity2016'].loc[fipsID] = self.data['Population2016'].loc[fipsID]/(record.__dict__['attributes']['ALAND']/1000**2)
-        self.data = self.data.dropna()
-
+        #self.data = self.data.dropna()
+        print(self.data.shape)
         file = open('database.pk1', 'wb')
         pickle.dump(self.data, file)
         file.close()
